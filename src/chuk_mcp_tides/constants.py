@@ -11,7 +11,7 @@ from enum import Enum
 
 class ServerConfig(str, Enum):
     NAME = "chuk-mcp-tides"
-    VERSION = "0.1.0"
+    VERSION = "0.4.0"
     DESCRIPTION = "Tidal Data Discovery & Analysis"
 
 
@@ -78,7 +78,7 @@ PROVIDER_INFO = {
         "name": "UK Environment Agency",
         "coverage": "England, Wales, N. Ireland",
         "auth": False,
-        "station_count": 44,
+        "station_count": 86,
     },
     TideProvider.UKHO: {
         "name": "UKHO Admiralty",
@@ -181,6 +181,15 @@ FORM_NUMBER_MIXED_MAX = 3.0
 
 DEFAULT_CACHE_TTL_SECONDS = 3600
 DEFAULT_CONSTITUENTS_DIR = "~/.chuk/tides/constituents"
+
+# Reference data TTLs (seconds) — persisted via chuk-artifacts SANDBOX scope
+REFERENCE_CACHE_TTL: dict[str, int] = {
+    "stations": 86_400,    # 24 h — station lists change rarely
+    "detail": 86_400,      # 24 h — station metadata is stable
+    "trend": 172_800,      # 48 h — annual sea-level trend data
+    "extremes": 172_800,   # 48 h — historical top-ten events
+    "flood": 43_200,       # 12 h — seasonal flood outlook
+}
 
 
 # ─── Defaults ────────────────────────────────────────────────────────────────

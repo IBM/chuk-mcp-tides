@@ -7,7 +7,14 @@ Tools: tides_observations, tides_latest
 import logging
 
 from ...core.tide_manager import TideManager
-from ...models.responses import ErrorResponse, format_response
+from ...models.responses import (
+    ErrorResponse,
+    LatestReadingResponse,
+    ObservationResponse,
+    TidalEvent,
+    WaterLevelReading,
+    format_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +35,46 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
     ) -> str:
         """Get observed (measured) water levels from a gauge station."""
         try:
-            _ = manager.resolve_provider(provider)
-            return format_response(
-                ErrorResponse(error="Observations not yet implemented"),
-                output_mode,
+            tp = manager.resolve_provider(provider)
+            raw = await manager.get_observations(
+                station_id, tp,
+                start_date=start_date,
+                end_date=end_date,
+                product=product,
+                datum=datum,
+                units=units,
             )
+
+            # Get station name (best effort)
+            station_name = station_id
+            try:
+                detail = await manager.get_station_detail(station_id, tp)
+                station_name = detail.get("name", station_id)
+            except Exception:
+                pass
+
+            readings = [
+                WaterLevelReading(
+                    datetime=str(r.get("datetime", r.get("time", ""))),
+                    value=float(r.get("value", 0.0)),
+                    quality=r.get("quality"),
+                    anomaly=r.get("anomaly"),
+                )
+                for r in raw.get("readings", [])
+            ]
+
+            response = ObservationResponse(
+                station_id=station_id,
+                station_name=station_name,
+                provider=raw.get("provider", tp.value),
+                datum=raw.get("datum", ""),
+                units=raw.get("units", units),
+                product=raw.get("product", product),
+                reading_count=len(readings),
+                readings=readings,
+                message=f"{len(readings)} observations for {station_name}",
+            )
+            return format_response(response, output_mode)
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
@@ -45,10 +87,64 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
     ) -> str:
         """Get the most recent water level reading from a station."""
         try:
-            _ = manager.resolve_provider(provider)
-            return format_response(
-                ErrorResponse(error="Latest reading not yet implemented"),
-                output_mode,
+            tp = manager.resolve_provider(provider)
+            raw = await manager.get_latest(station_id, tp, datum=datum)
+
+            # Get station name
+            station_name = station_id
+            try:
+                detail = await manager.get_station_detail(station_id, tp)
+                station_name = detail.get("name", station_id)
+            except Exception:
+                pass
+
+            dt = str(raw.get("datetime", raw.get("time", "")))
+            value = float(raw.get("value", 0.0))
+            tide_state = "unknown"
+            next_high = None
+            next_low = None
+
+            # Get current tide state from predictions
+            try:
+                pred_data = await manager.get_predictions(
+                    station_id, tp,
+                    start_date="today",
+                    interval="hilo",
+                    datum=datum,
+                )
+                state, nh, nl = manager.determine_tide_state(
+                    value, pred_data.get("predictions", []), dt,
+                )
+                tide_state = state
+                if nh:
+                    next_high = TidalEvent(
+                        datetime=str(nh.get("datetime", nh.get("time", ""))),
+                        height=float(nh.get("height", 0.0)),
+                        event_type="high",
+                    )
+                if nl:
+                    next_low = TidalEvent(
+                        datetime=str(nl.get("datetime", nl.get("time", ""))),
+                        height=float(nl.get("height", 0.0)),
+                        event_type="low",
+                    )
+            except Exception:
+                pass
+
+            d = raw.get("datum", datum or manager.default_datum(tp))
+
+            response = LatestReadingResponse(
+                station_id=station_id,
+                station_name=station_name,
+                datetime=dt,
+                value=value,
+                datum=str(d),
+                units="metric",
+                next_high=next_high,
+                next_low=next_low,
+                tide_state=tide_state,
+                message=f"Latest reading for {station_name}: {value:+.3f}m ({tide_state})",
             )
+            return format_response(response, output_mode)
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)

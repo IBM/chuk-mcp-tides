@@ -14,7 +14,7 @@ from chuk_mcp_tides.constants import (
 
 def test_server_config():
     assert ServerConfig.NAME.value == "chuk-mcp-tides"
-    assert ServerConfig.VERSION.value == "0.1.0"
+    assert ServerConfig.VERSION.value == "0.4.0"
 
 
 def test_all_providers_have_info():

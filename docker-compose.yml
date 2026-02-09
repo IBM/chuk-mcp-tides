@@ -1,0 +1,41 @@
+services:
+  tides:
+    build: .
+    ports:
+      - "8003:8003"
+    environment:
+      - TIDES_DEFAULT_PROVIDER=noaa
+      - TIDES_CACHE_TTL=3600
+      - ARTIFACTS_PROVIDER=memory
+    restart: unless-stopped
+
+  # Optional: S3-backed artifact storage with MinIO
+  # Uncomment to persist constituent data across restarts.
+  #
+  # minio:
+  #   image: minio/minio:latest
+  #   command: server /data --console-address ":9001"
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   environment:
+  #     MINIO_ROOT_USER: minioadmin
+  #     MINIO_ROOT_PASSWORD: minioadmin
+  #   volumes:
+  #     - minio-data:/data
+  #
+  # tides-s3:
+  #   build: .
+  #   ports:
+  #     - "8003:8003"
+  #   environment:
+  #     - ARTIFACTS_PROVIDER=s3
+  #     - BUCKET_NAME=tides-constituents
+  #     - AWS_ACCESS_KEY_ID=minioadmin
+  #     - AWS_SECRET_ACCESS_KEY=minioadmin
+  #     - AWS_ENDPOINT_URL_S3=http://minio:9000
+  #   depends_on:
+  #     - minio
+
+# volumes:
+#   minio-data:

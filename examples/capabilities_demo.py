@@ -8,7 +8,9 @@ Runs entirely offline using the discovery tools.
 
 import asyncio
 import json
+import sys
 
+sys.path.insert(0, ".")
 from tool_runner import create_runner
 
 

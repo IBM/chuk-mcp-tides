@@ -7,7 +7,16 @@ Tools: tides_flood_outlook, tides_flooding_calendar
 import logging
 
 from ...core.tide_manager import TideManager
-from ...models.responses import ErrorResponse, format_response
+from ...models.responses import (
+    ErrorResponse,
+    FloodCount,
+    FloodDay,
+    FloodingCalendarResponse,
+    FloodOutlookResponse,
+    FloodProjectionNOAA,
+    MonthFloodSummary,
+    format_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +27,7 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
     @mcp.tool  # type: ignore[union-attr]
     async def tides_flood_outlook(
         station_id: str,
-        product: str = "annual",
+        product: str = "htf_annual",
         flood_threshold: str = "minor",
         year: int | None = None,
         decade: int | None = None,
@@ -26,10 +35,38 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
     ) -> str:
         """Get high-tide flooding outlook (NOAA Derived Product API)."""
         try:
-            return format_response(
-                ErrorResponse(error="Flood outlook not yet implemented"),
-                output_mode,
+            raw = await manager.get_flood_outlook(
+                station_id, product=product, threshold=flood_threshold,
             )
+
+            counts = [
+                FloodCount(
+                    period=str(c.get("period", "")),
+                    count=int(c.get("count", 0)),
+                )
+                for c in raw.get("counts", [])
+            ]
+
+            projection = None
+            if raw.get("projection"):
+                p = raw["projection"]
+                projection = FloodProjectionNOAA(
+                    year=p["year"],
+                    expected=p["expected"],
+                    low=p["low"],
+                    high=p["high"],
+                )
+
+            response = FloodOutlookResponse(
+                station_id=station_id,
+                product=raw.get("product", product),
+                flood_threshold=raw.get("threshold", flood_threshold),
+                flood_level_m=float(raw.get("flood_level_m", 0.0)),
+                counts=counts,
+                projection=projection,
+                message=f"Flood outlook for {station_id}: {len(counts)} periods",
+            )
+            return format_response(response, output_mode)
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
@@ -45,10 +82,47 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
     ) -> str:
         """Generate a day-by-day flooding calendar for a location."""
         try:
-            _ = manager.resolve_provider(provider)
-            return format_response(
-                ErrorResponse(error="Flooding calendar not yet implemented"),
-                output_mode,
+            tp = manager.resolve_provider(provider)
+            raw = await manager.flooding_calendar(
+                station_id, threshold, tp,
+                year=year, slr_offset_mm=slr_offset_mm, datum=datum,
             )
+
+            monthly = [
+                MonthFloodSummary(
+                    month=m["month"],
+                    flood_days=m["flood_days"],
+                    max_height=m["max_height"],
+                    total_hours=m["total_hours"],
+                )
+                for m in raw.get("monthly_summary", [])
+            ]
+
+            flood_days = [
+                FloodDay(
+                    date=d["date"],
+                    peak_height=d["peak_height"],
+                    duration_hours=d["duration_hours"],
+                    tides_above=d["tides_above"],
+                )
+                for d in raw.get("flood_days", [])
+            ]
+
+            response = FloodingCalendarResponse(
+                station_id=station_id,
+                year=raw.get("year", year or 0),
+                threshold=raw.get("threshold", threshold),
+                slr_offset_mm=raw.get("slr_offset_mm", slr_offset_mm),
+                datum=raw.get("datum", ""),
+                total_flood_days=raw.get("total_flood_days", 0),
+                total_flood_hours=raw.get("total_flood_hours", 0.0),
+                monthly_summary=monthly,
+                flood_days=flood_days,
+                message=(
+                    f"Flooding calendar: {raw.get('total_flood_days', 0)} flood days "
+                    f"in {raw.get('year', year or 'N/A')}"
+                ),
+            )
+            return format_response(response, output_mode)
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)

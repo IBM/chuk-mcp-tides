@@ -27,8 +27,16 @@ logger = logging.getLogger(__name__)
 # Create the MCP server instance
 mcp = ChukMCPServer("chuk-mcp-tides")
 
+# Try to get the artifact store for constituent storage
+_artifact_store = None
+try:
+    from chuk_mcp_server import get_artifact_store
+    _artifact_store = get_artifact_store()
+except Exception:
+    pass  # No artifact store configured; will use filesystem fallback
+
 # Create tide manager instance
-manager = TideManager()
+manager = TideManager(artifact_store=_artifact_store)
 
 # Register all tool modules
 register_station_tools(mcp, manager)

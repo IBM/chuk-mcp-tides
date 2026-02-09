@@ -1,6 +1,6 @@
 # chuk-mcp-tides Specification
 
-Version 0.1.0
+Version 0.4.0
 
 ## Overview
 
@@ -8,7 +8,7 @@ chuk-mcp-tides is an MCP (Model Context Protocol) server that provides tidal
 predictions, observed water levels, harmonic analysis, and coastal flooding
 assessments from multiple national tide gauge networks.
 
-- **18 tools** for station discovery, predictions, observations, analysis, and flood risk
+- **17 tools** for station discovery, predictions, observations, analysis, and flood risk
 - **Dual output mode** — all tools return JSON (default) or human-readable text via `output_mode` parameter
 - **Async-first** — tool entry points are async; sync I/O runs in thread pools
 - **Pluggable storage** — time series data stored via chuk-artifacts (memory, filesystem, S3)
@@ -20,7 +20,7 @@ assessments from multiple national tide gauge networks.
 | Name | URL | Coverage | Auth | Notes |
 |------|-----|----------|------|-------|
 | `noaa` (default) | `https://api.tidesandcurrents.noaa.gov/api/prod/` | US coastline, Great Lakes, Pacific Islands | None | Free, no key. 3,000+ stations. Predictions up to 10 years (hi/lo). |
-| `ea` | `https://environment.data.gov.uk/flood-monitoring/` | England, Wales, N. Ireland | None | Free, no key. 44 tide gauges. Real-time 15-min observations (mAOD). |
+| `ea` | `https://environment.data.gov.uk/flood-monitoring/` | England, Wales, N. Ireland | None | Free, no key. 86 tide gauges. Real-time 15-min observations (mAOD). |
 | `ukho` | `https://admiraltyapi.azure-api.net/uktidalapi/api/V1/` | UK coastline | API key | Free Discovery tier: 607 stations, today + 6 days. Premium: 1 year history, £300/yr. |
 | `local` | N/A (offline) | Any location with constituents | None | Harmonic prediction from stored/fitted constituents via utide. No network required. |
 

@@ -20,6 +20,10 @@ src/chuk_mcp_tides/
 ├── constants.py             # Enums, datums, providers, scenarios, error messages
 ├── core/
 │   ├── __init__.py
+│   ├── constituent_storage.py # Pluggable constituent storage (chuk-artifacts backed)
+│   ├── http_client.py        # ResilientClient (connection pooling, retry, rate limiting)
+│   ├── reference_cache.py    # Two-tier reference data cache (memory + artifacts SANDBOX)
+│   ├── utils.py              # Haversine, date parsing, formatting helpers
 │   └── tide_manager.py      # Central orchestrator (provider dispatch, caching, storage)
 ├── models/
 │   ├── __init__.py          # Response model exports
@@ -96,7 +100,7 @@ External APIs / Local Engine
 | Analysis | `tools/analysis/` | threshold_exceedance, project_flooding, harmonic_analysis, residual, sea_level_trend, extreme_levels | 6 |
 | Flood Risk | `tools/flood/` | flood_outlook, flooding_calendar | 2 |
 | Discovery | `tools/discovery/` | status, capabilities | 2 |
-| | | **Total** | **18** |
+| | | **Total** | **17** |
 
 ## Provider Architecture
 
@@ -115,9 +119,17 @@ parameter or auto-detection from station ID format.
 
 ## Caching Strategy
 
-- **Response cache** — In-memory TTL cache (default 1 hour) for API responses
-- **Constituent store** — Disk-persisted harmonic constituents at `TIDES_CONSTITUENTS_DIR`
-- **Station metadata** — Cached after first lookup per session
+- **Time-series cache** — In-memory TTL cache (default 1 hour) for predictions and observations
+- **Reference cache** — Two-tier cache (in-memory + chuk-artifacts SANDBOX scope) for slow-changing data:
+  - Station lists (24h TTL) — full station inventories per provider
+  - Station details (24h TTL) — per-station metadata, datums, sensors
+  - Sea level trends (48h TTL) — long-term MSL trend data
+  - Extreme levels (48h TTL) — historical top-ten water levels
+  - Flood outlook (12h TTL) — annual/seasonal flood counts
+- **Constituent store** — `ConstituentStorage` backed by chuk-artifacts (memory/filesystem/S3)
+
+New server instances warm the reference cache index from the SANDBOX artifact store,
+avoiding redundant API calls for data that rarely changes.
 
 ## Testing
 
@@ -125,13 +137,19 @@ Tests are in `tests/` with provider-specific mocking:
 
 - `test_constants.py` — Enum validation, scenario definitions
 - `test_models.py` — Pydantic model serialization, to_text() output
-- `test_tide_manager.py` — Provider dispatch, caching, storage
+- `test_tide_manager.py` — Provider dispatch, caching, analysis algorithms
+- `test_constituent_storage.py` — Artifact-backed constituent storage
+- `test_http_client.py` — ResilientClient retry, backoff, rate limiting
+- `test_reference_cache.py` — Two-tier reference data cache
+- `test_noaa_provider.py` — NOAA CO-OPS API with mocked HTTP
+- `test_ea_provider.py` — EA Flood Monitoring API with mocked HTTP
+- `test_ukho_provider.py` — UKHO Admiralty API with mocked HTTP
 - `test_station_tools.py` — Station discovery tools
 - `test_prediction_tools.py` — Prediction tools
 - `test_observation_tools.py` — Observation tools
 - `test_analysis_tools.py` — Analysis tools
 - `test_flood_tools.py` — Flood risk tools
 - `test_discovery_tools.py` — Status and capabilities
-- `test_server.py` — Entry point and transport selection
+- `test_utils.py` — Date parsing, haversine, formatting
 
-Coverage threshold: **90% per file** enforced in CI.
+**230 tests** across 16 test modules.
