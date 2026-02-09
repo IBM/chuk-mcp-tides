@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) server providing tidal predictions, observed
 water levels, harmonic analysis, and coastal flooding assessments from multiple
 national tide gauge networks.
 
-- **17 tools** across 6 categories (stations, predictions, observations, analysis, flood risk, discovery)
+- **20 tools** across 7 categories (stations, predictions, observations, analysis, flood risk, currents, discovery)
 - **Multi-provider** — NOAA CO-OPS, UK Environment Agency, UKHO Admiralty, local harmonic engine
 - **Dual output** — JSON (structured) or human-readable text via `output_mode`
 - **Local harmonic engine** — offline tidal predictions from fitted constituents via utide
@@ -103,6 +103,14 @@ chuk-mcp-tides http --port 8003
 | `tides_flood_outlook` | NOAA high-tide flooding outlook (annual, decadal, next year) |
 | `tides_flooding_calendar` | Day-by-day flooding calendar with optional SLR offset |
 
+### Tidal Currents (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `tides_currents_stations` | List NOAA tidal current prediction stations (~4,400) |
+| `tides_currents_predictions` | Current velocity predictions (slack/flood/ebb, direction, depth) |
+| `tides_currents_latest` | Most recent current observation with velocity and direction |
+
 ### Discovery (2 tools)
 
 | Tool | Description |
@@ -112,7 +120,7 @@ chuk-mcp-tides http --port 8003
 
 ## Examples
 
-Three demo scripts are included in `examples/`:
+Four demo scripts are included in `examples/`:
 
 ```bash
 cd examples
@@ -120,12 +128,21 @@ cd examples
 # Quick start — NOAA stations, predictions, sea level trends (Providence, RI)
 python quick_start.py
 
-# Mersea Island scenario — multi-provider coastal flooding assessment
+# Tidal currents — current stations, predictions, latest observations
+python currents_demo.py
+
+# Mersea Island — complete coastal flooding assessment (EA → harmonic → predictions → calendar)
 python mersea_island_scenario.py
 
 # Capabilities demo — offline tool listing and status (no network)
 python capabilities_demo.py
 ```
+
+The Mersea Island scenario demonstrates the full analysis pipeline using only
+free EA data: station discovery, live observations with tide state inference,
+harmonic analysis (29 constituents from 30 days of observations), offline
+predictions from stored constituents, and a full-year flooding calendar for
+the Strood causeway.
 
 ## Environment Variables
 

@@ -11,6 +11,7 @@ Requires an API key set in the ``UKHO_API_KEY`` environment variable.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import httpx
 
@@ -64,7 +65,7 @@ class UKHOProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # list_stations
     # --------------------------------------------------------------------- #
-    async def list_stations(self, **kwargs: object) -> list[dict[str, object]]:
+    async def list_stations(self, **kwargs: Any) -> list[dict[str, Any]]:
         """Return UKHO tidal stations.
 
         Keyword Args:
@@ -77,13 +78,11 @@ class UKHOProvider(BaseTideProvider):
             resp = await self._client().get(url)
             data = resp.json()
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            raise ValueError(
-                f"UKHO API error listing stations: {exc}"
-            ) from exc
+            raise ValueError(f"UKHO API error listing stations: {exc}") from exc
 
         features: list[dict] = data.get("features", [])
 
-        stations: list[dict[str, object]] = []
+        stations: list[dict[str, Any]] = []
         for feature in features:
             props = feature.get("properties", {})
             geom = feature.get("geometry", {})
@@ -92,7 +91,7 @@ class UKHOProvider(BaseTideProvider):
             lon = coords[0] if len(coords) > 0 else None
             lat = coords[1] if len(coords) > 1 else None
 
-            station: dict[str, object] = {
+            station: dict[str, Any] = {
                 "station_id": props.get("Id", ""),
                 "name": props.get("Name", ""),
                 "country": props.get("Country", ""),
@@ -108,15 +107,17 @@ class UKHOProvider(BaseTideProvider):
         centre_lon = kwargs.get("lon")
         if centre_lat is not None and centre_lon is not None:
             radius_km = float(kwargs.get("radius_km", 50))
-            filtered: list[dict[str, object]] = []
+            filtered: list[dict[str, Any]] = []
             for s in stations:
                 s_lat = s.get("lat")
                 s_lon = s.get("lon")
                 if s_lat is None or s_lon is None:
                     continue
                 dist = haversine_km(
-                    float(centre_lat), float(centre_lon),
-                    float(s_lat), float(s_lon),
+                    float(centre_lat),
+                    float(centre_lon),
+                    float(s_lat),
+                    float(s_lon),
                 )
                 if dist <= radius_km:
                     s["distance_km"] = round(dist, 2)
@@ -129,16 +130,14 @@ class UKHOProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_station_detail
     # --------------------------------------------------------------------- #
-    async def get_station_detail(self, station_id: str) -> dict[str, object]:
+    async def get_station_detail(self, station_id: str) -> dict[str, Any]:
         """Fetch detailed metadata for a single UKHO station."""
         url = f"{_BASE_URL}/Stations/{station_id}"
         try:
             resp = await self._client().get(url)
             feature = resp.json()
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            raise ValueError(
-                f"UKHO API error for station '{station_id}': {exc}"
-            ) from exc
+            raise ValueError(f"UKHO API error for station '{station_id}': {exc}") from exc
 
         props = feature.get("properties", {})
         geom = feature.get("geometry", {})
@@ -159,9 +158,7 @@ class UKHOProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_predictions
     # --------------------------------------------------------------------- #
-    async def get_predictions(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_predictions(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Fetch tidal-event predictions (high/low water).
 
         Keyword Args:
@@ -182,24 +179,24 @@ class UKHOProvider(BaseTideProvider):
         if not isinstance(events, list):
             events = []
 
-        predictions: list[dict[str, object]] = []
+        predictions: list[dict[str, Any]] = []
         for evt in events:
-            predictions.append({
-                "time": evt.get("DateTime"),
-                "event_type": evt.get("EventType"),
-                "height": evt.get("Height"),
-                "is_approximate_time": evt.get("IsApproximateTime", False),
-                "is_approximate_height": evt.get("IsApproximateHeight", False),
-                "datum": "CD",
-            })
+            predictions.append(
+                {
+                    "time": evt.get("DateTime"),
+                    "event_type": evt.get("EventType"),
+                    "height": evt.get("Height"),
+                    "is_approximate_time": evt.get("IsApproximateTime", False),
+                    "is_approximate_height": evt.get("IsApproximateHeight", False),
+                    "datum": "CD",
+                }
+            )
         return predictions
 
     # --------------------------------------------------------------------- #
     # get_observations
     # --------------------------------------------------------------------- #
-    async def get_observations(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_observations(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Not supported -- the UKHO API only publishes predictions.
 
         Raises:
@@ -215,7 +212,7 @@ class UKHOProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_latest
     # --------------------------------------------------------------------- #
-    async def get_latest(self, station_id: str, **kwargs: object) -> dict[str, object]:
+    async def get_latest(self, station_id: str, **kwargs: Any) -> dict[str, Any]:
         """Not supported -- the UKHO API does not provide latest readings.
 
         Raises:

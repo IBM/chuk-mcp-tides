@@ -14,7 +14,6 @@ install hint.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -35,15 +34,13 @@ logger = logging.getLogger(__name__)
 try:
     import utide  # type: ignore[import-untyped]
     import numpy as np
-    from matplotlib.dates import date2num, num2date
 
     _HAS_UTIDE = True
 except ImportError:
     _HAS_UTIDE = False
 
 _UTIDE_INSTALL_MSG = (
-    "utide is required for local harmonic analysis/prediction.  "
-    "Install it with:  pip install utide"
+    "utide is required for local harmonic analysis/prediction.  Install it with:  pip install utide"
 )
 
 
@@ -89,9 +86,7 @@ def _compute_form_number(coef: Any) -> float:
     return diurnal / semidiurnal
 
 
-def _extract_highs_lows(
-    times: Any, signal: Any
-) -> list[dict[str, Any]]:
+def _extract_highs_lows(times: Any, signal: Any) -> list[dict[str, Any]]:
     """Find local maxima (highs) and minima (lows) in a continuous signal.
 
     Parameters
@@ -118,7 +113,9 @@ def _extract_highs_lows(
     for idx in high_indices:
         results.append(
             {
-                "datetime": times[idx].isoformat() if hasattr(times[idx], "isoformat") else str(times[idx]),
+                "datetime": times[idx].isoformat()
+                if hasattr(times[idx], "isoformat")
+                else str(times[idx]),
                 "height": round(float(signal[idx]), 4),
                 "type": "high",
             }
@@ -128,7 +125,9 @@ def _extract_highs_lows(
     for idx in low_indices:
         results.append(
             {
-                "datetime": times[idx].isoformat() if hasattr(times[idx], "isoformat") else str(times[idx]),
+                "datetime": times[idx].isoformat()
+                if hasattr(times[idx], "isoformat")
+                else str(times[idx]),
                 "height": round(float(signal[idx]), 4),
                 "type": "low",
             }
@@ -136,6 +135,23 @@ def _extract_highs_lows(
 
     results.sort(key=lambda r: r["datetime"])
     return results
+
+
+def _to_json_safe(obj: Any) -> Any:
+    """Recursively convert numpy types to JSON-safe Python types."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(v) for v in obj]
+    return obj
 
 
 def _coef_to_storage_dict(
@@ -146,22 +162,18 @@ def _coef_to_storage_dict(
     tidal_type: str,
     mean_level: float,
 ) -> dict[str, Any]:
-    """Serialize a utide coefficient object into a JSON-safe dict."""
-    freq_list: list[float] = []
-    if hasattr(coef, "aux") and hasattr(coef.aux, "freq"):
-        freq_list = [float(f) for f in coef.aux.freq]
+    """Serialize a utide coefficient object into a JSON-safe dict.
+
+    Stores the complete coefficient structure so that
+    ``utide.reconstruct`` can use it directly after loading.
+    """
+    # coef is a utide Bunch (dict subclass) — serialize all of it
+    coef_dict = _to_json_safe(dict(coef))
 
     return {
         "station_id": station_id or "unknown",
         "lat": lat,
-        "constituents": {
-            "name": [str(n) for n in coef.name],
-            "A": [round(float(a), 6) for a in coef.A],
-            "g": [round(float(g), 4) for g in coef.g],
-            "aux": {
-                "freq": [round(f, 8) for f in freq_list],
-            },
-        },
+        "coef": coef_dict,
         "mean_level": round(mean_level, 4),
         "form_number": round(form_number, 4),
         "tidal_type": tidal_type,
@@ -170,31 +182,38 @@ def _coef_to_storage_dict(
 
 
 def _storage_dict_to_coef(data: dict[str, Any]) -> Any:
-    """Reconstruct a utide-compatible coefficient object from stored JSON.
-
-    Returns an ``_UnstoredCoef`` namespace that quacks like a utide ``Bunch``.
-    """
+    """Reconstruct a utide-compatible Bunch from stored JSON."""
     _require_utide()
+    from utide.utilities import Bunch  # type: ignore[import-untyped]
 
-    class _Aux:
-        def __init__(self, freq: Any) -> None:
-            self.freq = freq
-            self.frq = freq  # utide uses both names internally
+    def _to_bunch(d: Any) -> Any:
+        """Recursively convert dicts to Bunch, lists to np.array where appropriate."""
+        if isinstance(d, dict):
+            return Bunch(**{k: _to_bunch(v) for k, v in d.items()})
+        if isinstance(d, list):
+            # Convert numeric/string lists to numpy arrays
+            if d and isinstance(d[0], (int, float)):
+                return np.array(d)
+            if d and isinstance(d[0], str):
+                return np.array(d)
+            return d
+        return d
 
-    class _UnstoredCoef:
-        """Minimal coefficient container accepted by ``utide.reconstruct``."""
+    if "coef" in data:
+        # New storage format — full coefficient structure
+        return _to_bunch(data["coef"])
 
-        def __init__(self, cdict: dict[str, Any], mean: float) -> None:
-            self.name = np.array(cdict["name"])
-            self.A = np.array(cdict["A"], dtype=float)
-            self.g = np.array(cdict["g"], dtype=float)
-            self.mean = mean
-            freq = cdict.get("aux", {}).get("freq", [])
-            self.aux = _Aux(np.array(freq, dtype=float))
-
-    constituents = data["constituents"]
+    # Legacy fallback for old storage format
+    cdict = data["constituents"]
     mean_level = data.get("mean_level", 0.0)
-    return _UnstoredCoef(constituents, mean_level)
+    freq = np.array(cdict.get("aux", {}).get("freq", []), dtype=float)
+    return Bunch(
+        name=np.array(cdict["name"]),
+        A=np.array(cdict["A"], dtype=float),
+        g=np.array(cdict["g"], dtype=float),
+        mean=mean_level,
+        aux=Bunch(frq=freq, freq=freq),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -226,11 +245,11 @@ class LocalProvider(BaseTideProvider):
 
     # ── BaseTideProvider interface ────────────────────────────────────────
 
-    async def list_stations(self, **kwargs: object) -> list[dict[str, object]]:
+    async def list_stations(self, **kwargs: Any) -> list[dict[str, Any]]:
         """Return stations that have stored constituents."""
         return await self._storage.list_stations()
 
-    async def get_station_detail(self, station_id: str) -> dict[str, object]:
+    async def get_station_detail(self, station_id: str) -> dict[str, Any]:
         """Load stored constituent metadata for *station_id*."""
         data = await self._storage.load(station_id)
         constituents = data.get("constituents", {})
@@ -261,30 +280,25 @@ class LocalProvider(BaseTideProvider):
             "constituents": constituent_list,
         }
 
-    async def get_predictions(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_predictions(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Generate predictions from stored constituents.
 
         Keyword arguments are forwarded to
         :meth:`predict_from_constituents`.
         """
         result = await self.predict_from_constituents(
-            station_id=station_id, **kwargs  # type: ignore[arg-type]
+            station_id=station_id,
+            **kwargs,  # type: ignore[arg-type]
         )
         return result["predictions"]
 
-    async def get_observations(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_observations(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Not supported -- local provider has no observation feed."""
         raise NotImplementedError(
             "Local provider does not support observations - use a network provider"
         )
 
-    async def get_latest(
-        self, station_id: str, **kwargs: object
-    ) -> dict[str, object]:
+    async def get_latest(self, station_id: str, **kwargs: Any) -> dict[str, Any]:
         """Not supported -- local provider has no observation feed."""
         raise NotImplementedError(
             "Local provider does not support observations - use a network provider"
@@ -324,14 +338,18 @@ class LocalProvider(BaseTideProvider):
         """
         _require_utide()
 
-        # Convert datetimes to matplotlib datenums for utide
-        time_datenums = np.array([date2num(t) for t in times])
+        # Convert datetimes to numpy datetime64 for utide
+        # Strip tzinfo first — np.datetime64 doesn't track timezones
+        naive_times = [
+            t.replace(tzinfo=None) if hasattr(t, "tzinfo") and t.tzinfo else t for t in times
+        ]
+        time_arr = np.array(naive_times, dtype="datetime64[s]")
         heights_arr = np.asarray(heights, dtype=float)
 
         # utide.solve is CPU-bound -- run in a thread
         coef = await asyncio.to_thread(
             utide.solve,
-            t=time_datenums,
+            t=time_arr,
             u=heights_arr,
             lat=lat,
             method="ols",
@@ -344,9 +362,7 @@ class LocalProvider(BaseTideProvider):
         mean_level = float(coef.mean) if hasattr(coef, "mean") else 0.0
 
         # Residual standard deviation
-        reconstructed = await asyncio.to_thread(
-            utide.reconstruct, t=time_datenums, coef=coef
-        )
+        reconstructed = await asyncio.to_thread(utide.reconstruct, t=time_arr, coef=coef)
         residuals = heights_arr - reconstructed.h
         residual_std = float(np.std(residuals))
 
@@ -381,8 +397,15 @@ class LocalProvider(BaseTideProvider):
             )
             stored = await self._storage.save(station_id, storage_dict)
 
+        # Compute observation span
+        observation_days = 0
+        if len(times) >= 2:
+            span = times[-1] - times[0]
+            observation_days = max(0, span.days)
+
         return {
             "constituents": constituents,
+            "observation_days": observation_days,
             "mean_level": round(mean_level, 4),
             "form_number": round(form_number, 4),
             "tidal_type": tidal_type,
@@ -399,7 +422,7 @@ class LocalProvider(BaseTideProvider):
         interval_minutes: int = 60,
         lat: float | None = None,
         datum_offset: float = 0.0,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Predict tidal heights from harmonic constituents.
 
@@ -438,9 +461,7 @@ class LocalProvider(BaseTideProvider):
         elif station_id is not None:
             data = await self._storage.load(station_id)
         else:
-            raise ValueError(
-                "Either station_id or constituents must be provided"
-            )
+            raise ValueError("Either station_id or constituents must be provided")
 
         coef = _storage_dict_to_coef(data)
 
@@ -454,9 +475,7 @@ class LocalProvider(BaseTideProvider):
 
         # Resolve date window
         if start_date is None:
-            dt_start = datetime.now(timezone.utc).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            dt_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         elif isinstance(start_date, str):
             dt_start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
         elif isinstance(start_date, date) and not isinstance(start_date, datetime):
@@ -471,9 +490,7 @@ class LocalProvider(BaseTideProvider):
         elif isinstance(end_date, str):
             dt_end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
         elif isinstance(end_date, date) and not isinstance(end_date, datetime):
-            dt_end = datetime(
-                end_date.year, end_date.month, end_date.day, tzinfo=timezone.utc
-            )
+            dt_end = datetime(end_date.year, end_date.month, end_date.day, tzinfo=timezone.utc)
         else:
             dt_end = end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
 
@@ -481,12 +498,12 @@ class LocalProvider(BaseTideProvider):
         total_minutes = int((dt_end - dt_start).total_seconds() / 60)
         n_steps = max(total_minutes // interval_minutes, 1) + 1
         time_deltas = [dt_start + timedelta(minutes=i * interval_minutes) for i in range(n_steps)]
-        time_datenums = np.array([date2num(t) for t in time_deltas])
+        # Strip tzinfo — np.datetime64 doesn't track timezones
+        naive_deltas = [t.replace(tzinfo=None) for t in time_deltas]
+        time_arr = np.array(naive_deltas, dtype="datetime64[s]")
 
-        # Reconstruct -- CPU-bound
-        result = await asyncio.to_thread(
-            utide.reconstruct, t=time_datenums, coef=coef, lat=effective_lat
-        )
+        # Reconstruct -- CPU-bound (lat is only used in solve, not reconstruct)
+        result = await asyncio.to_thread(utide.reconstruct, t=time_arr, coef=coef)
         signal = result.h + datum_offset
 
         # Build predictions list
@@ -513,4 +530,3 @@ class LocalProvider(BaseTideProvider):
             "highs_lows": highs_lows,
             "constituent_count": constituent_count,
         }
-

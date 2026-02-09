@@ -7,26 +7,25 @@ and handles artifact storage for time series data.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
 import time
 from collections import OrderedDict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
+from typing import Any
 
 import numpy as np
 
 from ..constants import (
     DEFAULT_CACHE_TTL_SECONDS,
+    DEFAULT_CURRENT_PREDICTION_DAYS,
     DEFAULT_OBSERVATION_DAYS,
     DEFAULT_PREDICTION_DAYS,
     DEFAULT_PROJECTION_SCENARIOS,
     DEFAULT_PROJECTION_YEARS,
     DEFAULT_SEARCH_RADIUS_KM,
     PROVIDER_DEFAULT_DATUMS,
-    PROVIDER_INFO,
-    PROVIDER_URLS,
     REFERENCE_CACHE_TTL,
     SLR_BASELINE_YEAR,
     SLR_SCENARIOS,
@@ -35,10 +34,10 @@ from ..constants import (
     EnvVar,
     TideProvider,
 )
+from ..providers.base import BaseTideProvider
 from .reference_cache import ReferenceCache
 from .utils import (
     add_days,
-    date_range_days,
     format_date_iso,
     format_date_noaa,
     haversine_km,
@@ -57,7 +56,7 @@ class TideManager:
     def __init__(
         self,
         default_provider: TideProvider | None = None,
-        artifact_store: object | None = None,
+        artifact_store: Any | None = None,
     ) -> None:
         provider_env = os.environ.get(EnvVar.DEFAULT_PROVIDER)
         if default_provider is not None:
@@ -75,14 +74,13 @@ class TideManager:
             self._artifact_store = artifact_store
         else:
             from chuk_artifacts import ArtifactStore
+
             self._artifact_store = ArtifactStore()
         self._cache: OrderedDict[str, tuple[object, float]] = OrderedDict()
         self._cache_lock = threading.Lock()
-        self._cache_ttl = int(
-            os.environ.get(EnvVar.CACHE_TTL, str(DEFAULT_CACHE_TTL_SECONDS))
-        )
+        self._cache_ttl = int(os.environ.get(EnvVar.CACHE_TTL, str(DEFAULT_CACHE_TTL_SECONDS)))
         self._ref_cache = ReferenceCache(artifact_store=self._artifact_store)
-        self._providers: dict[TideProvider, object] = {}
+        self._providers: dict[TideProvider, BaseTideProvider] = {}
 
     # ── Provider Management ─────────────────────────────────────────────────
 
@@ -102,21 +100,25 @@ class TideManager:
             logger.warning(f"Unknown provider '{provider}', falling back to default")
             return self._default_provider
 
-    def _get_provider(self, tp: TideProvider) -> object:
+    def _get_provider(self, tp: TideProvider) -> BaseTideProvider:
         """Lazy-load and cache a provider instance."""
         if tp not in self._providers:
             if tp == TideProvider.NOAA:
                 from ..providers.noaa import NOAAProvider
+
                 self._providers[tp] = NOAAProvider()
             elif tp == TideProvider.EA:
                 from ..providers.ea import EAProvider
+
                 self._providers[tp] = EAProvider()
             elif tp == TideProvider.UKHO:
                 from ..providers.ukho import UKHOProvider
+
                 self._providers[tp] = UKHOProvider()
             elif tp == TideProvider.LOCAL:
                 from ..providers.local import LocalProvider
                 from .constituent_storage import ConstituentStorage
+
                 storage = ConstituentStorage(artifact_store=self._artifact_store)
                 self._providers[tp] = LocalProvider(constituent_storage=storage)
         return self._providers[tp]
@@ -167,8 +169,14 @@ class TideManager:
         max_results: int = 20,
     ) -> list[dict]:
         cache_key = self._cache_key(
-            "stations", provider.value, str(lat), str(lon),
-            str(radius_km), str(region), str(station_type), str(max_results),
+            "stations",
+            provider.value,
+            str(lat),
+            str(lon),
+            str(radius_km),
+            str(region),
+            str(station_type),
+            str(max_results),
         )
         cached = self.get_cached(cache_key)
         if cached is not None:
@@ -181,9 +189,12 @@ class TideManager:
             return ref_cached
 
         p = self._get_provider(provider)
-        stations = await p.list_stations(  # type: ignore[union-attr]
-            lat=lat, lon=lon, radius_km=radius_km,
-            region=region, station_type=station_type,
+        stations = await p.list_stations(
+            lat=lat,
+            lon=lon,
+            radius_km=radius_km,
+            region=region,
+            station_type=station_type,
             max_results=max_results,
         )
         self.set_cached(cache_key, stations)
@@ -191,7 +202,9 @@ class TideManager:
         return stations
 
     async def get_station_detail(
-        self, station_id: str, provider: TideProvider,
+        self,
+        station_id: str,
+        provider: TideProvider,
     ) -> dict:
         cache_key = self._cache_key("detail", provider.value, station_id)
         cached = self.get_cached(cache_key)
@@ -205,7 +218,7 @@ class TideManager:
             return ref_cached
 
         p = self._get_provider(provider)
-        detail = await p.get_station_detail(station_id)  # type: ignore[union-attr]
+        detail = await p.get_station_detail(station_id)
         self.set_cached(cache_key, detail)
         await self._ref_cache.put(cache_key, detail, ref_ttl)
         return detail
@@ -224,14 +237,15 @@ class TideManager:
         for tp in providers:
             try:
                 p = self._get_provider(tp)
-                stations = await p.list_stations(  # type: ignore[union-attr]
-                    lat=lat, lon=lon, radius_km=500, max_results=100,
+                stations = await p.list_stations(
+                    lat=lat,
+                    lon=lon,
+                    radius_km=500,
+                    max_results=100,
                 )
                 for s in stations:
                     s["provider"] = tp.value
-                    s["distance_km"] = haversine_km(
-                        lat, lon, s["lat"], s["lon"]
-                    )
+                    s["distance_km"] = haversine_km(lat, lon, s["lat"], s["lon"])
                 all_stations.extend(stations)
             except Exception as e:
                 logger.warning(f"Failed to query {tp.value}: {e}")
@@ -256,16 +270,21 @@ class TideManager:
         d = datum or self.default_datum(provider)
 
         cache_key = self._cache_key(
-            "pred", provider.value, station_id,
-            format_date_iso(start), format_date_iso(end),
-            interval, d, units,
+            "pred",
+            provider.value,
+            station_id,
+            format_date_iso(start),
+            format_date_iso(end),
+            interval,
+            d,
+            units,
         )
         cached = self.get_cached(cache_key)
         if cached is not None:
             return cached  # type: ignore[return-value]
 
         p = self._get_provider(provider)
-        result = await p.get_predictions(  # type: ignore[union-attr]
+        result = await p.get_predictions(
             station_id,
             start_date=format_date_noaa(start),
             end_date=format_date_noaa(end),
@@ -297,7 +316,7 @@ class TideManager:
         datum_offset: float = 0.0,
     ) -> dict:
         p = self._get_provider(TideProvider.LOCAL)
-        return await p.predict_from_constituents(  # type: ignore[union-attr]
+        return await p.predict_from_constituents(  # type: ignore[attr-defined]
             station_id=station_id,
             constituents=constituents,
             start_date=start_date,
@@ -323,16 +342,21 @@ class TideManager:
         d = datum or self.default_datum(provider)
 
         cache_key = self._cache_key(
-            "obs", provider.value, station_id,
-            format_date_iso(start), format_date_iso(end),
-            product, d, units,
+            "obs",
+            provider.value,
+            station_id,
+            format_date_iso(start),
+            format_date_iso(end),
+            product,
+            d,
+            units,
         )
         cached = self.get_cached(cache_key)
         if cached is not None:
             return cached  # type: ignore[return-value]
 
         p = self._get_provider(provider)
-        result = await p.get_observations(  # type: ignore[union-attr]
+        result = await p.get_observations(
             station_id,
             start_date=format_date_noaa(start),
             end_date=format_date_noaa(end),
@@ -362,8 +386,9 @@ class TideManager:
     ) -> dict:
         d = datum or self.default_datum(provider)
         p = self._get_provider(provider)
-        return await p.get_latest(  # type: ignore[union-attr]
-            station_id, datum=d,
+        return await p.get_latest(
+            station_id,
+            datum=d,
         )
 
     # ── Analysis: Threshold Exceedance ──────────────────────────────────────
@@ -393,25 +418,35 @@ class TideManager:
             )
             if source == "predictions":
                 data = await self.get_predictions(
-                    station_id, provider,
+                    station_id,
+                    provider,
                     start_date=format_date_iso(current),
                     end_date=format_date_iso(chunk_end),
-                    interval="6min", datum=d, units="metric",
+                    interval="6min",
+                    datum=d,
+                    units="metric",
                 )
                 all_events.extend(data["predictions"])
             else:
                 data = await self.get_observations(
-                    station_id, provider,
+                    station_id,
+                    provider,
                     start_date=format_date_iso(current),
                     end_date=format_date_iso(chunk_end),
-                    datum=d, units="metric",
+                    datum=d,
+                    units="metric",
                 )
                 all_events.extend(data["readings"])
             current = date(current.year + 1, 1, 1)
 
         return self._compute_exceedance(
-            all_events, threshold, d, source, group_by,
-            format_date_iso(start), format_date_iso(end),
+            all_events,
+            threshold,
+            d,
+            source,
+            group_by,
+            format_date_iso(start),
+            format_date_iso(end),
         )
 
     def _compute_exceedance(
@@ -527,18 +562,22 @@ class TideManager:
         baseline_end = format_date_iso(date(baseline_year, 12, 31))
 
         baseline = await self.threshold_exceedance(
-            station_id, threshold, baseline_start, baseline_end,
-            provider, source="predictions", datum=d, group_by="none",
+            station_id,
+            threshold,
+            baseline_start,
+            baseline_end,
+            provider,
+            source="predictions",
+            datum=d,
+            group_by="none",
         )
         baseline_count = baseline["total_exceedances"]
 
         # Get station detail for name and SLR trend
         station_name = station_id
-        observed_trend = None
         try:
             detail = await self.get_station_detail(station_id, provider)
             station_name = detail.get("name", station_id)
-            observed_trend = detail.get("mean_sea_level_trend")
         except Exception:
             pass
 
@@ -552,9 +591,7 @@ class TideManager:
                 slr_mm = rate * (yr - SLR_BASELINE_YEAR)
                 effective_threshold = threshold - (slr_mm / 1000.0)
                 # Count baseline predictions that exceed the lower threshold
-                count = self._count_above(
-                    baseline.get("_raw_events", []), effective_threshold
-                )
+                count = self._count_above(baseline.get("_raw_events", []), effective_threshold)
                 # If no raw events cached, estimate from baseline proportionally
                 if count == 0 and baseline_count > 0:
                     base_slr_mm = rate * (baseline_year - SLR_BASELINE_YEAR)
@@ -563,14 +600,16 @@ class TideManager:
                     scale = max(1.0, 1.0 + additional_slr_m * 20)
                     count = int(baseline_count * scale)
 
-                projections.append({
-                    "year": yr,
-                    "scenario": scenario,
-                    "slr_mm": round(slr_mm, 1),
-                    "projected_exceedances": count,
-                    "projected_hours": round(count * 0.1, 2),
-                    "delta_from_baseline": count - baseline_count,
-                })
+                projections.append(
+                    {
+                        "year": yr,
+                        "scenario": scenario,
+                        "slr_mm": round(slr_mm, 1),
+                        "projected_exceedances": count,
+                        "projected_hours": round(count * 0.1, 2),
+                        "delta_from_baseline": count - baseline_count,
+                    }
+                )
 
         # Tipping points
         tipping_points = []
@@ -578,7 +617,7 @@ class TideManager:
             if scenario not in SLR_SCENARIOS:
                 continue
             scenario_projs = [p for p in projections if p["scenario"] == scenario]
-            tp: dict[str, int | None] = {
+            tp: dict[str, str | int | None] = {
                 "scenario": scenario,
                 "double_year": None,
                 "tenfold_year": None,
@@ -624,7 +663,8 @@ class TideManager:
     ) -> dict:
         # Fetch observations
         obs = await self.get_observations(
-            station_id, provider,
+            station_id,
+            provider,
             start_date=start_date,
             end_date=end_date,
             product="water_level",
@@ -642,12 +682,30 @@ class TideManager:
         lat = detail.get("lat", 0.0)
 
         # Delegate to local provider
+        # EA returns "time" key, NOAA returns "datetime" — handle both.
+        # analyze_harmonics expects datetime objects sorted ascending.
         local = self._get_provider(TideProvider.LOCAL)
-        times = [r["datetime"] for r in readings]
-        heights = [r["value"] for r in readings]
 
-        return await local.analyze_harmonics(  # type: ignore[union-attr]
-            times, heights, lat,
+        # Parse timestamps and pair with heights
+        pairs = []
+        for r in readings:
+            raw_t = r.get("datetime", r.get("time", ""))
+            t = (
+                datetime.fromisoformat(raw_t.replace("Z", "+00:00"))
+                if isinstance(raw_t, str)
+                else raw_t
+            )
+            pairs.append((t, float(r["value"])))
+
+        # Sort ascending by time (EA returns descending)
+        pairs.sort(key=lambda p: p[0])
+        times = [p[0] for p in pairs]
+        heights = [p[1] for p in pairs]
+
+        return await local.analyze_harmonics(  # type: ignore[attr-defined]
+            times,
+            heights,
+            lat,
             station_id=station_id,
             store=store_constituents,
         )
@@ -666,14 +724,20 @@ class TideManager:
 
         # Fetch both observations and predictions
         obs_data = await self.get_observations(
-            station_id, provider,
-            start_date=start_date, end_date=end_date,
-            datum=d, product="water_level",
+            station_id,
+            provider,
+            start_date=start_date,
+            end_date=end_date,
+            datum=d,
+            product="water_level",
         )
         pred_data = await self.get_predictions(
-            station_id, provider,
-            start_date=start_date, end_date=end_date,
-            interval="6min", datum=d,
+            station_id,
+            provider,
+            start_date=start_date,
+            end_date=end_date,
+            interval="6min",
+            datum=d,
         )
 
         # Build prediction lookup by datetime
@@ -697,12 +761,14 @@ class TideManager:
                 continue
 
             residual = obs_val - pred_val
-            residuals.append({
-                "datetime": dt,
-                "observed": obs_val,
-                "predicted": pred_val,
-                "residual": round(residual, 4),
-            })
+            residuals.append(
+                {
+                    "datetime": dt,
+                    "observed": obs_val,
+                    "predicted": pred_val,
+                    "residual": round(residual, 4),
+                }
+            )
 
             if residual > max_pos["peak_residual"]:
                 max_pos = {"peak_datetime": dt, "peak_residual": round(residual, 4)}
@@ -748,7 +814,9 @@ class TideManager:
     # ── Analysis: Sea Level Trend ───────────────────────────────────────────
 
     async def get_sea_level_trend(
-        self, station_id: str, provider: TideProvider,
+        self,
+        station_id: str,
+        provider: TideProvider,
     ) -> dict:
         ref_key = self._cache_key("trend", station_id)
         ref_ttl = REFERENCE_CACHE_TTL["trend"]
@@ -758,7 +826,7 @@ class TideManager:
 
         p = self._get_provider(provider)
         if hasattr(p, "get_sea_level_trend"):
-            result = await p.get_sea_level_trend(station_id)  # type: ignore[union-attr]
+            result = await p.get_sea_level_trend(station_id)  # type: ignore[attr-defined]
             await self._ref_cache.put(ref_key, result, ref_ttl)
             return result
         raise NotImplementedError(f"Sea level trends not available from {provider.value}")
@@ -766,7 +834,10 @@ class TideManager:
     # ── Analysis: Extreme Levels ────────────────────────────────────────────
 
     async def get_extreme_levels(
-        self, station_id: str, provider: TideProvider, datum: str | None = None,
+        self,
+        station_id: str,
+        provider: TideProvider,
+        datum: str | None = None,
     ) -> dict:
         d = datum or self.default_datum(provider)
         ref_key = self._cache_key("extremes", station_id, d)
@@ -777,7 +848,7 @@ class TideManager:
 
         p = self._get_provider(provider)
         if hasattr(p, "get_extremes"):
-            result = await p.get_extremes(station_id, datum=d)  # type: ignore[union-attr]
+            result = await p.get_extremes(station_id, datum=d)  # type: ignore[attr-defined]
             await self._ref_cache.put(ref_key, result, ref_ttl)
             return result
         raise NotImplementedError(f"Extreme levels not available from {provider.value}")
@@ -798,8 +869,10 @@ class TideManager:
 
         p = self._get_provider(TideProvider.NOAA)
         if hasattr(p, "get_flood_outlook"):
-            result = await p.get_flood_outlook(  # type: ignore[union-attr]
-                station_id, product=product, threshold=threshold,
+            result = await p.get_flood_outlook(  # type: ignore[attr-defined]
+                station_id,
+                product=product,
+                threshold=threshold,
             )
             await self._ref_cache.put(ref_key, result, ref_ttl)
             return result
@@ -825,16 +898,18 @@ class TideManager:
         end = format_date_iso(date(yr, 12, 31))
 
         pred_data = await self.get_predictions(
-            station_id, provider,
-            start_date=start, end_date=end,
-            interval="hilo", datum=d,
+            station_id,
+            provider,
+            start_date=start,
+            end_date=end,
+            interval="hilo",
+            datum=d,
         )
 
         # Process predictions into flood days
         flood_days: dict[str, dict] = {}
         monthly: dict[int, dict] = {
-            m: {"flood_days": set(), "max_height": 0.0, "total_hours": 0.0}
-            for m in range(1, 13)
+            m: {"flood_days": set(), "max_height": 0.0, "total_hours": 0.0} for m in range(1, 13)
         }
 
         for ev in pred_data["predictions"]:
@@ -867,12 +942,14 @@ class TideManager:
 
         monthly_summary = []
         for m in range(1, 13):
-            monthly_summary.append({
-                "month": m,
-                "flood_days": len(monthly[m]["flood_days"]),
-                "max_height": round(monthly[m]["max_height"], 4),
-                "total_hours": round(monthly[m]["total_hours"], 2),
-            })
+            monthly_summary.append(
+                {
+                    "month": m,
+                    "flood_days": len(monthly[m]["flood_days"]),
+                    "max_height": round(monthly[m]["max_height"], 4),
+                    "total_hours": round(monthly[m]["total_hours"], 2),
+                }
+            )
 
         return {
             "station_id": station_id,
@@ -885,6 +962,113 @@ class TideManager:
             "monthly_summary": monthly_summary,
             "flood_days": flood_day_list,
         }
+
+    # ── Currents ─────────────────────────────────────────────────────────────
+
+    async def list_current_stations(
+        self,
+        lat: float | None = None,
+        lon: float | None = None,
+        radius_km: float = DEFAULT_SEARCH_RADIUS_KM,
+        region: str | None = None,
+        max_results: int = 20,
+    ) -> list[dict]:
+        """List NOAA tidal current prediction stations."""
+        cache_key = self._cache_key(
+            "current_stations",
+            str(lat),
+            str(lon),
+            str(radius_km),
+            str(region),
+            str(max_results),
+        )
+        cached = self.get_cached(cache_key)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+
+        ref_ttl = REFERENCE_CACHE_TTL.get("current_stations", 86_400)
+        ref_cached = await self._ref_cache.get(cache_key, ref_ttl)
+        if ref_cached is not None:
+            self.set_cached(cache_key, ref_cached)
+            return ref_cached
+
+        p = self._get_provider(TideProvider.NOAA)
+        if not hasattr(p, "list_current_stations"):
+            raise NotImplementedError("Current stations are NOAA-only")
+        stations = await p.list_current_stations(  # type: ignore[attr-defined]
+            lat=lat,
+            lon=lon,
+            radius_km=radius_km,
+            region=region,
+            max_results=max_results,
+        )
+        self.set_cached(cache_key, stations)
+        await self._ref_cache.put(cache_key, stations, ref_ttl)
+        return stations
+
+    async def get_current_predictions(
+        self,
+        station_id: str,
+        start_date: str = "today",
+        end_date: str | None = None,
+        interval: str = "MAX_SLACK",
+        units: str = "metric",
+        bin: str = "1",
+    ) -> dict:
+        """Get tidal current predictions for a station (NOAA only)."""
+        start = parse_date(start_date)
+        end = parse_date(end_date) if end_date else add_days(start, DEFAULT_CURRENT_PREDICTION_DAYS)
+
+        cache_key = self._cache_key(
+            "curr_pred",
+            station_id,
+            format_date_iso(start),
+            format_date_iso(end),
+            interval,
+            units,
+            bin,
+        )
+        cached = self.get_cached(cache_key)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+
+        p = self._get_provider(TideProvider.NOAA)
+        if not hasattr(p, "get_current_predictions"):
+            raise NotImplementedError("Current predictions are NOAA-only")
+        result = await p.get_current_predictions(  # type: ignore[attr-defined]
+            station_id,
+            start_date=format_date_noaa(start),
+            end_date=format_date_noaa(end),
+            units=units,
+            interval=interval,
+            bin=bin,
+        )
+
+        out = {
+            "station_id": station_id,
+            "provider": "noaa",
+            "units": "cm/s",
+            "start_date": format_date_iso(start),
+            "end_date": format_date_iso(end),
+            "interval": interval,
+            "predictions": result,
+        }
+        self.set_cached(cache_key, out)
+        return out
+
+    async def get_current_latest(
+        self,
+        station_id: str,
+        bin: str = "1",
+    ) -> dict:
+        """Get the most recent current observation (NOAA only)."""
+        p = self._get_provider(TideProvider.NOAA)
+        if not hasattr(p, "get_current_latest"):
+            raise NotImplementedError("Current observations are NOAA-only")
+        return await p.get_current_latest(  # type: ignore[attr-defined]
+            station_id,
+            bin=bin,
+        )
 
     # ── Tide State ──────────────────────────────────────────────────────────
 

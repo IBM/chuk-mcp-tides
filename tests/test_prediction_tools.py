@@ -18,14 +18,20 @@ def prediction_tools(mock_mcp, mock_manager):
 
 
 async def test_predict_basic(prediction_tools, mock_manager):
-    mock_manager.get_predictions = AsyncMock(return_value={
-        "predictions": [
-            {"datetime": "2024-01-01T06:00:00", "height": 1.5, "event_type": "high"},
-            {"datetime": "2024-01-01T12:00:00", "height": -0.3, "event_type": "low"},
-        ],
-        "provider": "noaa", "datum": "MLLW", "units": "metric",
-        "start_date": "2024-01-01", "end_date": "2024-01-07", "interval": "hilo",
-    })
+    mock_manager.get_predictions = AsyncMock(
+        return_value={
+            "predictions": [
+                {"datetime": "2024-01-01T06:00:00", "height": 1.5, "event_type": "high"},
+                {"datetime": "2024-01-01T12:00:00", "height": -0.3, "event_type": "low"},
+            ],
+            "provider": "noaa",
+            "datum": "MLLW",
+            "units": "metric",
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-07",
+            "interval": "hilo",
+        }
+    )
     mock_manager.get_station_detail = AsyncMock(return_value={"name": "Providence"})
 
     result = await prediction_tools.get_tool("tides_predict")("8454000")
@@ -38,12 +44,15 @@ async def test_predict_basic(prediction_tools, mock_manager):
 
 async def test_predict_with_time_field(prediction_tools, mock_manager):
     """Providers may return 'time' instead of 'datetime'."""
-    mock_manager.get_predictions = AsyncMock(return_value={
-        "predictions": [
-            {"time": "2024-01-01T06:00:00", "height": 1.5},
-        ],
-        "provider": "ukho", "datum": "CD",
-    })
+    mock_manager.get_predictions = AsyncMock(
+        return_value={
+            "predictions": [
+                {"time": "2024-01-01T06:00:00", "height": 1.5},
+            ],
+            "provider": "ukho",
+            "datum": "CD",
+        }
+    )
     mock_manager.get_station_detail = AsyncMock(return_value={"name": "Aberdeen"})
 
     result = await prediction_tools.get_tool("tides_predict")("0001")
@@ -53,9 +62,11 @@ async def test_predict_with_time_field(prediction_tools, mock_manager):
 
 async def test_predict_station_detail_failure(prediction_tools, mock_manager):
     """Should still work if station detail lookup fails."""
-    mock_manager.get_predictions = AsyncMock(return_value={
-        "predictions": [{"datetime": "2024-01-01T06:00", "height": 1.0}],
-    })
+    mock_manager.get_predictions = AsyncMock(
+        return_value={
+            "predictions": [{"datetime": "2024-01-01T06:00", "height": 1.0}],
+        }
+    )
     mock_manager.get_station_detail = AsyncMock(side_effect=RuntimeError("not found"))
 
     result = await prediction_tools.get_tool("tides_predict")("8454000")
@@ -65,15 +76,18 @@ async def test_predict_station_detail_failure(prediction_tools, mock_manager):
 
 
 async def test_predict_text(prediction_tools, mock_manager):
-    mock_manager.get_predictions = AsyncMock(return_value={
-        "predictions": [
-            {"datetime": "2024-01-01T06:00", "height": 1.5, "event_type": "high"},
-        ],
-    })
+    mock_manager.get_predictions = AsyncMock(
+        return_value={
+            "predictions": [
+                {"datetime": "2024-01-01T06:00", "height": 1.5, "event_type": "high"},
+            ],
+        }
+    )
     mock_manager.get_station_detail = AsyncMock(return_value={"name": "Test"})
 
     result = await prediction_tools.get_tool("tides_predict")(
-        "8454000", output_mode="text",
+        "8454000",
+        output_mode="text",
     )
     assert "[high]" in result
 
@@ -92,20 +106,25 @@ async def test_predict_error(prediction_tools, mock_manager):
 
 
 async def test_predict_local(prediction_tools, mock_manager):
-    mock_manager.predict_local = AsyncMock(return_value={
-        "predictions": [
-            {"datetime": "2024-01-01T00:00", "height": 0.5},
-            {"datetime": "2024-01-01T01:00", "height": 0.8},
-        ],
-        "highs_lows": [
-            {"datetime": "2024-01-01T06:00", "height": 1.2, "event_type": "high"},
-        ],
-        "constituent_count": 37,
-        "start_date": "2024-01-01", "end_date": "2024-01-02",
-    })
+    mock_manager.predict_local = AsyncMock(
+        return_value={
+            "predictions": [
+                {"datetime": "2024-01-01T00:00", "height": 0.5},
+                {"datetime": "2024-01-01T01:00", "height": 0.8},
+            ],
+            "highs_lows": [
+                {"datetime": "2024-01-01T06:00", "height": 1.2, "event_type": "high"},
+            ],
+            "constituent_count": 37,
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-02",
+        }
+    )
 
     result = await prediction_tools.get_tool("tides_predict_local")(
-        start_date="2024-01-01", end_date="2024-01-02", station_id="8454000",
+        start_date="2024-01-01",
+        end_date="2024-01-02",
+        station_id="8454000",
     )
     parsed = json.loads(result)
     assert parsed["constituent_count"] == 37
@@ -115,12 +134,18 @@ async def test_predict_local(prediction_tools, mock_manager):
 
 
 async def test_predict_local_text(prediction_tools, mock_manager):
-    mock_manager.predict_local = AsyncMock(return_value={
-        "predictions": [], "highs_lows": [], "constituent_count": 37,
-    })
+    mock_manager.predict_local = AsyncMock(
+        return_value={
+            "predictions": [],
+            "highs_lows": [],
+            "constituent_count": 37,
+        }
+    )
 
     result = await prediction_tools.get_tool("tides_predict_local")(
-        start_date="2024-01-01", end_date="2024-01-07", output_mode="text",
+        start_date="2024-01-01",
+        end_date="2024-01-07",
+        output_mode="text",
     )
     assert "37" in result
 
@@ -131,7 +156,8 @@ async def test_predict_local_error(prediction_tools, mock_manager):
     )
 
     result = await prediction_tools.get_tool("tides_predict_local")(
-        start_date="2024-01-01", end_date="2024-01-07",
+        start_date="2024-01-01",
+        end_date="2024-01-07",
     )
     parsed = json.loads(result)
     assert "No constituents stored" in parsed["error"]

@@ -5,6 +5,7 @@ All magic strings live here as enums or module-level constants.
 """
 
 from enum import Enum
+from typing import Any
 
 # ─── Server Configuration ──────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ PROVIDER_URLS = {
     TideProvider.UKHO: "https://admiraltyapi.azure-api.net/uktidalapi/api/V1/",
 }
 
-PROVIDER_INFO = {
+PROVIDER_INFO: dict[TideProvider, dict[str, Any]] = {
     TideProvider.NOAA: {
         "name": "NOAA CO-OPS",
         "coverage": "US coastline, Great Lakes, Pacific Islands",
@@ -139,7 +140,7 @@ PROVIDER_DEFAULT_DATUMS = {
 # ─── Sea Level Rise Scenarios ────────────────────────────────────────────────
 
 
-SLR_SCENARIOS = {
+SLR_SCENARIOS: dict[str, dict[str, Any]] = {
     "low": {"rate_mm_yr": 3.0, "source": "IPCC SSP1-2.6 / UKCP18 low"},
     "intermediate_low": {"rate_mm_yr": 5.0, "source": "IPCC SSP2-4.5"},
     "intermediate": {"rate_mm_yr": 8.0, "source": "NOAA Intermediate"},
@@ -184,11 +185,12 @@ DEFAULT_CONSTITUENTS_DIR = "~/.chuk/tides/constituents"
 
 # Reference data TTLs (seconds) — persisted via chuk-artifacts SANDBOX scope
 REFERENCE_CACHE_TTL: dict[str, int] = {
-    "stations": 86_400,    # 24 h — station lists change rarely
-    "detail": 86_400,      # 24 h — station metadata is stable
-    "trend": 172_800,      # 48 h — annual sea-level trend data
-    "extremes": 172_800,   # 48 h — historical top-ten events
-    "flood": 43_200,       # 12 h — seasonal flood outlook
+    "stations": 86_400,  # 24 h — station lists change rarely
+    "detail": 86_400,  # 24 h — station metadata is stable
+    "trend": 172_800,  # 48 h — annual sea-level trend data
+    "extremes": 172_800,  # 48 h — historical top-ten events
+    "flood": 43_200,  # 12 h — seasonal flood outlook
+    "current_stations": 86_400,  # 24 h — current station lists change rarely
 }
 
 
@@ -199,6 +201,7 @@ DEFAULT_MAX_STATIONS = 20
 DEFAULT_SEARCH_RADIUS_KM = 50.0
 DEFAULT_PREDICTION_DAYS = 7
 DEFAULT_OBSERVATION_DAYS = 1
+DEFAULT_CURRENT_PREDICTION_DAYS = 2
 SURGE_THRESHOLD_M = 0.3
 
 DEFAULT_PROJECTION_YEARS = [2030, 2040, 2050, 2060, 2080, 2100]
@@ -216,12 +219,8 @@ class ErrorMessages:
         "Provider '{name}' is not responding. Try again or use alternative provider."
     )
     NO_API_KEY = "UKHO provider requires API key. Set UKHO_API_KEY environment variable."
-    INSUFFICIENT_DATA = (
-        "Harmonic analysis requires ≥30 days of observations. Got {n} days."
-    )
-    NO_ARTIFACT_STORE = (
-        "No artifact store available. Configure CHUK_ARTIFACTS_PROVIDER..."
-    )
+    INSUFFICIENT_DATA = "Harmonic analysis requires ≥30 days of observations. Got {n} days."
+    NO_ARTIFACT_STORE = "No artifact store available. Configure CHUK_ARTIFACTS_PROVIDER..."
     THRESHOLD_BELOW_DATUM = "Threshold {value} is below minimum datum level {min}"
 
 

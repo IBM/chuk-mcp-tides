@@ -26,9 +26,7 @@ SAMPLE_TREND = {
 def mock_store():
     store = MagicMock()
     store.store = AsyncMock(return_value="art-ref-001")
-    store.retrieve = AsyncMock(
-        return_value=json.dumps(SAMPLE_STATIONS).encode("utf-8")
-    )
+    store.retrieve = AsyncMock(return_value=json.dumps(SAMPLE_STATIONS).encode("utf-8"))
     store.search = AsyncMock(return_value=[])
     return store
 
@@ -121,7 +119,7 @@ async def test_get_memory_ttl_expiry_falls_to_artifact(cache, mock_store):
 
 async def test_get_triggers_warm_on_first_call(cache, mock_store):
     assert cache.warmed is False
-    result = await cache.get("nonexistent", ttl=86400)
+    await cache.get("nonexistent", ttl=86400)
     assert cache.warmed is True
     mock_store.search.assert_called_once()
 

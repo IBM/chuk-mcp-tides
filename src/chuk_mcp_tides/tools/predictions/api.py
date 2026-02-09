@@ -5,6 +5,7 @@ Tools: tides_predict, tides_predict_local
 """
 
 import logging
+from typing import Any
 
 from ...core.tide_manager import TideManager
 from ...models.responses import (
@@ -18,10 +19,10 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_prediction_tools(mcp: object, manager: TideManager) -> None:
+def register_prediction_tools(mcp: Any, manager: TideManager) -> None:
     """Register prediction tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_predict(
         station_id: str,
         start_date: str = "today",
@@ -36,7 +37,8 @@ def register_prediction_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.get_predictions(
-                station_id, tp,
+                station_id,
+                tp,
                 start_date=start_date,
                 end_date=end_date,
                 interval=interval,
@@ -78,7 +80,7 @@ def register_prediction_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_predict_local(
         start_date: str,
         end_date: str,
@@ -127,8 +129,7 @@ def register_prediction_tools(mcp: object, manager: TideManager) -> None:
                 predictions=predictions,
                 highs_lows=highs_lows,
                 message=(
-                    f"Local prediction: {len(predictions)} points, "
-                    f"{len(highs_lows)} highs/lows"
+                    f"Local prediction: {len(predictions)} points, {len(highs_lows)} highs/lows"
                 ),
             )
             return format_response(response, output_mode)

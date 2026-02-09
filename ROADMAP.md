@@ -43,7 +43,7 @@ Local harmonic predictions, UK data sources, artifact storage.
 
 ## v0.4.0 — Production Hardening (Complete)
 
-Performance, reliability, and deployment.
+Performance, reliability, deployment, and harmonic engine fixes.
 
 - [x] ResilientClient with connection pooling, retry, and exponential backoff
 - [x] Per-provider rate limiting (configurable requests/second)
@@ -54,14 +54,27 @@ Performance, reliability, and deployment.
   - New servers warm index from S3 — no redundant API downloads
 - [x] Sea level trends, extreme levels, flood outlook now cached (previously uncached)
 - [x] Dockerfile and docker-compose for containerised deployment
-- [x] 230 tests across 16 test modules
+- [x] Tidal current predictions (NOAA current stations, ~4,400 stations)
+  - tides_currents_stations — station discovery with location filtering
+  - tides_currents_predictions — velocity predictions (slack/flood/ebb, direction)
+  - tides_currents_latest — most recent current observation
+  - Auto-detect bin number from station metadata (bin numbers are station-specific)
+- [x] EA provider: start_date handling (YYYYMMDD → ISO since), auto-scaling limit for long date ranges
+- [x] Observation-based tide state inference for EA stations (rising/falling from recent readings)
+- [x] Harmonic engine fixes:
+  - utide time arrays now use np.datetime64 (date2num caused 0 constituents — periodogram dt=0)
+  - Coefficient storage serializes full utide Bunch (reconstruct needs subscript access to aux.opt)
+  - utide.reconstruct() no longer passed invalid lat parameter
+  - EA observations sorted ascending before harmonic analysis (EA returns descending)
+- [x] Mersea Island demo: self-contained EA workflow (discovery → observations → harmonic analysis → local predictions → flooding calendar)
+- [x] 245 tests across 17 test modules, 20 tools across 7 categories
 
 ## v0.5.0 — Extended Capabilities
 
-Future enhancements beyond the core 17 tools.
+Future enhancements beyond the core 20 tools.
 
-- [ ] Tidal current predictions (NOAA current stations)
-- [ ] Global tide models (FES2014 / TPXO)
+- [ ] Datum conversions (tides_convert_datum — convert heights between datums at a station)
+- [ ] Return period analysis (tides_return_periods — GEV/GPD extreme value analysis)
+- [ ] Safe passage windows (tides_safe_passage — time windows above draft threshold)
 - [ ] Surge probability (extreme value analysis, return periods)
 - [ ] Multi-station interpolation (co-tidal charts)
-- [ ] InSAR integration (ground subsidence from Sentinel-1)

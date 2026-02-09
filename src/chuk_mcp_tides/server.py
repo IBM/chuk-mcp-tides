@@ -73,9 +73,7 @@ def _init_artifact_store() -> bool:
         from chuk_mcp_server import set_global_artifact_store
 
         provider_str = provider.value if isinstance(provider, StorageProvider) else provider
-        session_str = (
-            SessionProvider.REDIS.value if redis_url else SessionProvider.MEMORY.value
-        )
+        session_str = SessionProvider.REDIS.value if redis_url else SessionProvider.MEMORY.value
 
         store_kwargs: dict[str, Any] = {
             "storage_provider": provider_str,
@@ -120,9 +118,7 @@ def main() -> None:
     parser.add_argument(
         "--host", default="localhost", help="Host for HTTP mode (default: localhost)"
     )
-    parser.add_argument(
-        "--port", type=int, default=8003, help="Port for HTTP mode (default: 8003)"
-    )
+    parser.add_argument("--port", type=int, default=8003, help="Port for HTTP mode (default: 8003)")
 
     args = parser.parse_args()
 

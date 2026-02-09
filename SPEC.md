@@ -8,7 +8,7 @@ chuk-mcp-tides is an MCP (Model Context Protocol) server that provides tidal
 predictions, observed water levels, harmonic analysis, and coastal flooding
 assessments from multiple national tide gauge networks.
 
-- **17 tools** for station discovery, predictions, observations, analysis, and flood risk
+- **20 tools** for station discovery, predictions, observations, analysis, flood risk, and tidal currents
 - **Dual output mode** — all tools return JSON (default) or human-readable text via `output_mode` parameter
 - **Async-first** — tool entry points are async; sync I/O runs in thread pools
 - **Pluggable storage** — time series data stored via chuk-artifacts (memory, filesystem, S3)
@@ -288,8 +288,13 @@ Get the most recent water level reading from a station.
 | `units` | `str` | Units |
 | `next_high` | `TidalEvent?` | Next predicted high water |
 | `next_low` | `TidalEvent?` | Next predicted low water |
-| `tide_state` | `str` | `rising`, `falling`, `high_slack`, `low_slack` |
+| `tide_state` | `str` | `rising`, `falling`, `high_slack`, `low_slack`, `unknown` |
 | `message` | `str` | Result message |
+
+**Tide state inference:** For providers with predictions (NOAA, UKHO), tide state
+is determined by comparing the current level with predicted hi/lo events. For
+providers without predictions (EA), the server falls back to comparing the
+latest reading with the previous observation to infer rising or falling.
 
 ---
 
@@ -409,9 +414,15 @@ local predictions for any station with sufficient observation history.
 | `message` | `str` | Result message |
 
 **Minimum data requirements:**
-- 30 days resolves major constituents (M2, S2, K1, O1)
+- 30 days resolves major constituents (M2, S2, K1, O1) — typically 25-30 constituents
 - 180 days resolves most named constituents
 - 365 days recommended for full analysis (37+ constituents)
+
+**EA workflow:** The EA provider holds ~30 days of rolling observations. This is
+sufficient for harmonic analysis. The server auto-converts EA `start_date` to
+the EA `since` parameter, sorts observations ascending, and parses timestamps
+to `np.datetime64` for utide. Fitted constituents are stored for subsequent
+use by `tides_predict_local` and `tides_flooding_calendar`.
 
 ---
 
@@ -565,6 +576,101 @@ a threshold will be exceeded by predicted tides plus optional sea level rise.
 | `flood_days` | `FloodDay[]` | Each flooded day: date, peak_height, duration_hours, tides_above |
 | `artifact_ref` | `str?` | Artifact reference |
 | `message` | `str` | Result message |
+
+---
+
+### Tidal Current Tools
+
+#### `tides_currents_stations`
+
+List NOAA tidal current prediction stations, optionally filtered by location.
+NOAA provides ~4,400 current prediction stations covering US coastlines.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `lat` | `float?` | `None` | Latitude for proximity search |
+| `lon` | `float?` | `None` | Longitude for proximity search |
+| `radius_km` | `float?` | `50` | Search radius in kilometres |
+| `region` | `str?` | `None` | US state abbreviation |
+| `max_results` | `int?` | `20` | Maximum stations returned |
+
+**Response:** `CurrentStationListResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider` | `str` | Provider (always `noaa`) |
+| `station_count` | `int` | Number of stations returned |
+| `stations` | `CurrentStationSummary[]` | Station ID, name, lat, lon, type, depth, bin_number |
+| `search_location` | `float[2]?` | Search centre `[lat, lon]` if proximity search |
+| `search_radius_km` | `float?` | Radius used |
+| `message` | `str` | Result message |
+
+---
+
+#### `tides_currents_predictions`
+
+Get tidal current predictions (velocity, direction, event type) for a station.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `station_id` | `str` | *required* | Current station identifier |
+| `start_date` | `str` | `today` | Start date `YYYY-MM-DD` or `today` |
+| `end_date` | `str?` | `None` | End date. Default: start + 2 days |
+| `interval` | `str` | `MAX_SLACK` | `MAX_SLACK` (max flood/ebb + slack), `6`, `10`, `30`, `60` (minutes) |
+| `bin` | `str?` | auto-detect | Depth bin number. Auto-detected from station metadata if omitted. |
+| `units` | `str` | `metric` | `metric` or `english` |
+
+**Response:** `CurrentPredictionResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `station_id` | `str` | Station |
+| `station_name` | `str` | Station name |
+| `provider` | `str` | Provider |
+| `units` | `str` | Velocity units (`cm/s`) |
+| `start_date` | `str` | Range start |
+| `end_date` | `str` | Range end |
+| `interval` | `str` | Interval used |
+| `event_count` | `int` | Number of prediction points |
+| `predictions` | `CurrentPredictionEvent[]` | Datetime, velocity_cm_s, event_type (slack/flood/ebb), direction |
+| `artifact_ref` | `str?` | Artifact reference |
+| `message` | `str` | Result message |
+
+**Velocity convention:** Positive = flood, negative = ebb, zero = slack. Native NOAA unit (cm/s).
+
+---
+
+#### `tides_currents_latest`
+
+Get the most recent tidal current observation from a station.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `station_id` | `str` | *required* | Current station identifier |
+| `bin` | `str?` | auto-detect | Depth bin number. Auto-detected from station metadata if omitted. |
+
+**Response:** `LatestCurrentResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `station_id` | `str` | Station |
+| `station_name` | `str` | Station name |
+| `datetime` | `str` | Reading timestamp (UTC) |
+| `velocity_cm_s` | `float` | Current velocity (positive=flood, negative=ebb) |
+| `direction` | `float?` | Current direction in degrees true |
+| `event_type` | `str?` | `slack`, `flood`, or `ebb` (derived from velocity) |
+| `depth` | `float?` | Depth in metres |
+| `bin_number` | `str?` | Depth bin |
+| `units` | `str` | Units (`cm/s`) |
+| `message` | `str` | Result message |
+
+**Note:** NOAA-only. Current observations require an active sensor at the station.
 
 ---
 
@@ -821,11 +927,10 @@ points per year in under 2 seconds.
 
 ### Planned Additions
 
-- **Tidal current predictions** — NOAA current stations, slack/max predictions
-- **Global tide models** — FES2014 / TPXO integration for locations without gauges
-- **Surge probability** — extreme value analysis (return periods) from residual history
+- **Datum conversions** — convert heights between vertical datums at a station
+- **Return period analysis** — GEV/GPD extreme value analysis for 1-in-N-year levels
+- **Safe passage windows** — time windows when water level exceeds a draft threshold
 - **Multi-station interpolation** — tidal predictions between gauges using co-tidal charts
-- **InSAR integration** — ground subsidence rates from chuk-mcp-stac Sentinel-1 to refine relative SLR
 
 ### Note on Geocoding
 

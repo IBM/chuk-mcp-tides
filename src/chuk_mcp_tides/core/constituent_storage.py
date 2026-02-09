@@ -31,7 +31,11 @@ class ConstituentStorage:
         The chuk-artifacts store instance.  Required.
     """
 
-    def __init__(self, artifact_store: Any) -> None:
+    def __init__(self, artifact_store: Any = None) -> None:
+        if artifact_store is None:
+            from chuk_artifacts import ArtifactStore
+
+            artifact_store = ArtifactStore()
         self._store = artifact_store
         # In-memory cache: station_id → constituent dict
         self._cache: dict[str, dict[str, Any]] = {}
@@ -66,13 +70,15 @@ class ConstituentStorage:
             self._artifact_index[station_id] = artifact_id
             logger.info(
                 "Stored constituents for %s (artifact_id=%s)",
-                station_id, artifact_id,
+                station_id,
+                artifact_id,
             )
             return True
         except Exception as exc:
             logger.error(
                 "Failed to store constituents for %s: %s",
-                station_id, exc,
+                station_id,
+                exc,
             )
             return False
 
@@ -100,12 +106,12 @@ class ConstituentStorage:
             except Exception as exc:
                 logger.warning(
                     "Failed to load constituents for %s from artifact store: %s",
-                    station_id, exc,
+                    station_id,
+                    exc,
                 )
 
         raise FileNotFoundError(
-            f"No stored constituents for station '{station_id}'.  "
-            f"Run analyze_harmonics first."
+            f"No stored constituents for station '{station_id}'.  Run analyze_harmonics first."
         )
 
     # ── List ──────────────────────────────────────────────────────────────
@@ -129,8 +135,6 @@ class ConstituentStorage:
             "lat": data.get("lat"),
             "tidal_type": data.get("tidal_type", "unknown"),
             "form_number": data.get("form_number"),
-            "constituent_count": len(
-                data.get("constituents", {}).get("name", [])
-            ),
+            "constituent_count": len(data.get("constituents", {}).get("name", [])),
             "fitted_date": data.get("fitted_date"),
         }

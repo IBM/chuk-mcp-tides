@@ -5,6 +5,7 @@ Tools: tides_observations, tides_latest
 """
 
 import logging
+from typing import Any
 
 from ...core.tide_manager import TideManager
 from ...models.responses import (
@@ -19,10 +20,25 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_observation_tools(mcp: object, manager: TideManager) -> None:
+def _find_previous_reading(readings: list[dict], current_dt: str) -> dict | None:
+    """Find the reading immediately before *current_dt* in a list."""
+    sorted_r = sorted(
+        readings,
+        key=lambda r: r.get("datetime", r.get("time", "")),
+    )
+    prev = None
+    for r in sorted_r:
+        r_dt = r.get("datetime", r.get("time", ""))
+        if r_dt >= current_dt:
+            break
+        prev = r
+    return prev
+
+
+def register_observation_tools(mcp: Any, manager: TideManager) -> None:
     """Register observation tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_observations(
         station_id: str,
         start_date: str = "today",
@@ -37,7 +53,8 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.get_observations(
-                station_id, tp,
+                station_id,
+                tp,
                 start_date=start_date,
                 end_date=end_date,
                 product=product,
@@ -78,7 +95,7 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_latest(
         station_id: str,
         datum: str | None = None,
@@ -107,13 +124,16 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
             # Get current tide state from predictions
             try:
                 pred_data = await manager.get_predictions(
-                    station_id, tp,
+                    station_id,
+                    tp,
                     start_date="today",
                     interval="hilo",
                     datum=datum,
                 )
                 state, nh, nl = manager.determine_tide_state(
-                    value, pred_data.get("predictions", []), dt,
+                    value,
+                    pred_data.get("predictions", []),
+                    dt,
                 )
                 tide_state = state
                 if nh:
@@ -129,7 +149,24 @@ def register_observation_tools(mcp: object, manager: TideManager) -> None:
                         event_type="low",
                     )
             except Exception:
-                pass
+                # Fallback: infer tide state from recent observations
+                try:
+                    obs = await manager.get_observations(
+                        station_id,
+                        tp,
+                        start_date="today",
+                    )
+                    readings = obs.get("readings", [])
+                    if len(readings) >= 2:
+                        prev = _find_previous_reading(readings, dt)
+                        if prev is not None:
+                            prev_val = float(prev.get("value", prev.get("height", 0.0)))
+                            if value > prev_val:
+                                tide_state = "rising"
+                            elif value < prev_val:
+                                tide_state = "falling"
+                except Exception:
+                    pass
 
             d = raw.get("datum", datum or manager.default_datum(tp))
 

@@ -161,17 +161,31 @@ def mock_manager():
     mgr.get_station_detail = AsyncMock(return_value={})
     mgr.find_nearest = AsyncMock(return_value=[])
     mgr.get_predictions = AsyncMock(return_value={"predictions": []})
-    mgr.predict_local = AsyncMock(return_value={"predictions": [], "highs_lows": [], "constituent_count": 0})
+    mgr.predict_local = AsyncMock(
+        return_value={"predictions": [], "highs_lows": [], "constituent_count": 0}
+    )
     mgr.get_observations = AsyncMock(return_value={"readings": []})
     mgr.get_latest = AsyncMock(return_value={})
-    mgr.threshold_exceedance = AsyncMock(return_value={"groups": [], "total_exceedances": 0, "total_hours_above": 0.0})
+    mgr.threshold_exceedance = AsyncMock(
+        return_value={"groups": [], "total_exceedances": 0, "total_hours_above": 0.0}
+    )
     mgr.project_flooding = AsyncMock(return_value={"projections": [], "tipping_points": []})
     mgr.harmonic_analysis = AsyncMock(return_value={"constituents": []})
-    mgr.compute_residual = AsyncMock(return_value={"residuals": [], "surge_events": [], "max_positive_surge": {}, "max_negative_surge": {}})
+    mgr.compute_residual = AsyncMock(
+        return_value={
+            "residuals": [],
+            "surge_events": [],
+            "max_positive_surge": {},
+            "max_negative_surge": {},
+        }
+    )
     mgr.get_sea_level_trend = AsyncMock(return_value={})
     mgr.get_extreme_levels = AsyncMock(return_value={"top_ten_high": [], "top_ten_low": []})
     mgr.get_flood_outlook = AsyncMock(return_value={"counts": []})
     mgr.flooding_calendar = AsyncMock(return_value={"monthly_summary": [], "flood_days": []})
+    mgr.list_current_stations = AsyncMock(return_value=[])
+    mgr.get_current_predictions = AsyncMock(return_value={"predictions": []})
+    mgr.get_current_latest = AsyncMock(return_value={})
     return mgr
 
 

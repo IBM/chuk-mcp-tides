@@ -7,6 +7,7 @@ Tools: tides_threshold_exceedance, tides_project_flooding,
 """
 
 import logging
+from typing import Any
 
 from ...constants import DEFAULT_PROJECTION_SCENARIOS, DEFAULT_PROJECTION_YEARS
 from ...core.tide_manager import TideManager
@@ -33,10 +34,10 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_analysis_tools(mcp: object, manager: TideManager) -> None:
+def register_analysis_tools(mcp: Any, manager: TideManager) -> None:
     """Register analysis tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_threshold_exceedance(
         station_id: str,
         threshold: float,
@@ -52,9 +53,14 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.threshold_exceedance(
-                station_id, threshold,
-                start_date, end_date,
-                tp, source=source, datum=datum, group_by=group_by,
+                station_id,
+                threshold,
+                start_date,
+                end_date,
+                tp,
+                source=source,
+                datum=datum,
+                group_by=group_by,
             )
 
             groups = [
@@ -85,16 +91,13 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
                 total_hours_above=raw.get("total_hours_above", 0.0),
                 groups=groups,
                 trend=trend,
-                message=(
-                    f"{raw.get('total_exceedances', 0)} exceedances "
-                    f"above {threshold:.2f}m"
-                ),
+                message=(f"{raw.get('total_exceedances', 0)} exceedances above {threshold:.2f}m"),
             )
             return format_response(response, output_mode)
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_project_flooding(
         station_id: str,
         threshold: float,
@@ -108,7 +111,9 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.project_flooding(
-                station_id, threshold, tp,
+                station_id,
+                threshold,
+                tp,
                 years=years or DEFAULT_PROJECTION_YEARS,
                 scenarios=scenarios or DEFAULT_PROJECTION_SCENARIOS,
                 datum=datum,
@@ -154,7 +159,7 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_harmonic_analysis(
         station_id: str,
         start_date: str,
@@ -167,7 +172,10 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.harmonic_analysis(
-                station_id, start_date, end_date, tp,
+                station_id,
+                start_date,
+                end_date,
+                tp,
                 store_constituents=store_constituents,
             )
 
@@ -198,7 +206,7 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_residual(
         station_id: str,
         start_date: str,
@@ -211,7 +219,11 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.compute_residual(
-                station_id, start_date, end_date, tp, datum=datum,
+                station_id,
+                start_date,
+                end_date,
+                tp,
+                datum=datum,
             )
 
             max_pos = raw.get("max_positive_surge", {})
@@ -262,7 +274,7 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_sea_level_trend(
         station_id: str,
         provider: str | None = None,
@@ -303,7 +315,7 @@ def register_analysis_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_extreme_levels(
         station_id: str,
         datum: str | None = None,

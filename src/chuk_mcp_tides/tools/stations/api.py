@@ -5,6 +5,7 @@ Tools: tides_list_stations, tides_describe_station, tides_find_nearest
 """
 
 import logging
+from typing import Any
 
 from ...core.tide_manager import TideManager
 from ...models.responses import (
@@ -23,10 +24,10 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_station_tools(mcp: object, manager: TideManager) -> None:
+def register_station_tools(mcp: Any, manager: TideManager) -> None:
     """Register station discovery tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_list_stations(
         provider: str | None = None,
         lat: float | None = None,
@@ -42,8 +43,11 @@ def register_station_tools(mcp: object, manager: TideManager) -> None:
             tp = manager.resolve_provider(provider)
             raw = await manager.list_stations(
                 tp,
-                lat=lat, lon=lon, radius_km=radius_km,
-                region=region, station_type=station_type,
+                lat=lat,
+                lon=lon,
+                radius_km=radius_km,
+                region=region,
+                station_type=station_type,
                 max_results=max_results,
             )
 
@@ -73,7 +77,7 @@ def register_station_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_describe_station(
         station_id: str,
         provider: str | None = None,
@@ -143,7 +147,7 @@ def register_station_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_find_nearest(
         lat: float,
         lon: float,
@@ -161,7 +165,10 @@ def register_station_tools(mcp: object, manager: TideManager) -> None:
                 providers = [tp]
 
             raw = await manager.find_nearest(
-                lat, lon, providers=providers, max_results=max_results,
+                lat,
+                lon,
+                providers=providers,
+                max_results=max_results,
             )
 
             stations = [

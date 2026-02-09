@@ -54,6 +54,10 @@ src/chuk_mcp_tides/
     ├── flood/
     │   ├── __init__.py
     │   └── api.py           # tides_flood_outlook, tides_flooding_calendar
+    ├── currents/
+    │   ├── __init__.py
+    │   └── api.py           # tides_currents_stations, tides_currents_predictions,
+    │                        # tides_currents_latest
     └── discovery/
         ├── __init__.py
         └── api.py           # tides_status, tides_capabilities
@@ -99,8 +103,9 @@ External APIs / Local Engine
 | Observations | `tools/observations/` | observations, latest | 2 |
 | Analysis | `tools/analysis/` | threshold_exceedance, project_flooding, harmonic_analysis, residual, sea_level_trend, extreme_levels | 6 |
 | Flood Risk | `tools/flood/` | flood_outlook, flooding_calendar | 2 |
+| Tidal Currents | `tools/currents/` | currents_stations, currents_predictions, currents_latest | 3 |
 | Discovery | `tools/discovery/` | status, capabilities | 2 |
-| | | **Total** | **17** |
+| | | **Total** | **20** |
 
 ## Provider Architecture
 
@@ -117,11 +122,27 @@ Each provider implements a common interface:
 The TideManager dispatches to the correct provider based on the `provider`
 parameter or auto-detection from station ID format.
 
+### Provider-Specific Behaviours
+
+- **EA observations** — The server converts `start_date` (YYYYMMDD) to EA's `since` parameter and auto-scales the API limit for date ranges beyond 24 hours (~100 readings/day). EA data arrives in reverse chronological order and is sorted ascending before harmonic analysis.
+- **EA tide state** — Since EA doesn't provide predictions, `tides_latest` infers rising/falling from recent observations (comparing consecutive readings).
+- **NOAA currents** — Bin numbers are station-specific (not always 1). The currents tools auto-detect the correct bin from station metadata when not explicitly provided.
+
+### Harmonic Engine (Local Provider)
+
+The local provider uses utide for harmonic analysis and reconstruction:
+
+- Time arrays use `np.datetime64[s]` (not matplotlib `date2num` — utide's periodogram requires this for correct sampling frequency detection)
+- Coefficients are serialized as complete utide `Bunch` dicts (reconstruct requires subscript access to nested `aux.opt` structure)
+- `utide.reconstruct()` does not accept `lat` — latitude is only used during `utide.solve()`
+- Timezone info is stripped before conversion to `np.datetime64` to avoid numpy UserWarnings
+
 ## Caching Strategy
 
 - **Time-series cache** — In-memory TTL cache (default 1 hour) for predictions and observations
 - **Reference cache** — Two-tier cache (in-memory + chuk-artifacts SANDBOX scope) for slow-changing data:
   - Station lists (24h TTL) — full station inventories per provider
+  - Current station lists (24h TTL) — NOAA current prediction stations
   - Station details (24h TTL) — per-station metadata, datums, sensors
   - Sea level trends (48h TTL) — long-term MSL trend data
   - Extreme levels (48h TTL) — historical top-ten water levels
@@ -149,7 +170,8 @@ Tests are in `tests/` with provider-specific mocking:
 - `test_observation_tools.py` — Observation tools
 - `test_analysis_tools.py` — Analysis tools
 - `test_flood_tools.py` — Flood risk tools
+- `test_currents_tools.py` — Tidal current tools
 - `test_discovery_tools.py` — Status and capabilities
 - `test_utils.py` — Date parsing, haversine, formatting
 
-**230 tests** across 16 test modules.
+**245 tests** across 17 test modules.

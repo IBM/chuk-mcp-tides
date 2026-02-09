@@ -39,7 +39,10 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_find_nearest",
-        lat=41.8, lon=-71.4, provider="noaa", max_results=3,
+        lat=41.8,
+        lon=-71.4,
+        provider="noaa",
+        max_results=3,
         output_mode="text",
     )
     print(result)
@@ -47,7 +50,10 @@ async def main() -> None:
     # Also get the JSON to extract station_id
     result_json = await runner.run(
         "tides_find_nearest",
-        lat=41.8, lon=-71.4, provider="noaa", max_results=1,
+        lat=41.8,
+        lon=-71.4,
+        provider="noaa",
+        max_results=1,
     )
     nearest = json.loads(result_json)
     station_id = nearest["stations"][0]["station_id"]
@@ -61,7 +67,8 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_describe_station",
-        station_id=station_id, provider="noaa",
+        station_id=station_id,
+        provider="noaa",
         output_mode="text",
     )
     print(result)
@@ -73,8 +80,10 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_predict",
-        station_id=station_id, provider="noaa",
-        start_date="today", interval="hilo",
+        station_id=station_id,
+        provider="noaa",
+        start_date="today",
+        interval="hilo",
         output_mode="text",
     )
     print(result)
@@ -86,7 +95,8 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_latest",
-        station_id=station_id, provider="noaa",
+        station_id=station_id,
+        provider="noaa",
         output_mode="text",
     )
     print(result)
@@ -98,7 +108,8 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_sea_level_trend",
-        station_id=station_id, provider="noaa",
+        station_id=station_id,
+        provider="noaa",
         output_mode="text",
     )
     print(result)
@@ -110,7 +121,8 @@ async def main() -> None:
 
     result = await runner.run(
         "tides_extreme_levels",
-        station_id=station_id, provider="noaa",
+        station_id=station_id,
+        provider="noaa",
         output_mode="text",
     )
     print(result)

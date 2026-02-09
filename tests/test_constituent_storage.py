@@ -29,9 +29,7 @@ def mock_store():
     """Mock chuk-artifacts ArtifactStore."""
     store = MagicMock()
     store.store = AsyncMock(return_value="art-12345")
-    store.retrieve = AsyncMock(
-        return_value=json.dumps(SAMPLE_DATA).encode("utf-8")
-    )
+    store.retrieve = AsyncMock(return_value=json.dumps(SAMPLE_DATA).encode("utf-8"))
     store.storage_provider = "memory"
     return store
 

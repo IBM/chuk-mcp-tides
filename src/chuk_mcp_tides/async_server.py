@@ -15,6 +15,7 @@ from chuk_mcp_server import ChukMCPServer
 
 from .core.tide_manager import TideManager
 from .tools.analysis import register_analysis_tools
+from .tools.currents import register_currents_tools
 from .tools.discovery import register_discovery_tools
 from .tools.flood import register_flood_tools
 from .tools.observations import register_observation_tools
@@ -31,6 +32,7 @@ mcp = ChukMCPServer("chuk-mcp-tides")
 _artifact_store = None
 try:
     from chuk_mcp_server import get_artifact_store
+
     _artifact_store = get_artifact_store()
 except Exception:
     pass  # No artifact store configured; will use filesystem fallback
@@ -44,6 +46,7 @@ register_prediction_tools(mcp, manager)
 register_observation_tools(mcp, manager)
 register_analysis_tools(mcp, manager)
 register_flood_tools(mcp, manager)
+register_currents_tools(mcp, manager)
 register_discovery_tools(mcp, manager)
 
 # Run the server

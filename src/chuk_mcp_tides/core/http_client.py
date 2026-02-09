@@ -101,9 +101,7 @@ class ResilientClient:
                 await asyncio.sleep(self._min_interval - elapsed)
             self._last_request_time = time.monotonic()
 
-    async def get(
-        self, url: str, params: dict[str, Any] | None = None
-    ) -> httpx.Response:
+    async def get(self, url: str, params: dict[str, Any] | None = None) -> httpx.Response:
         """Send a GET request with retry and rate limiting.
 
         Parameters
@@ -140,8 +138,11 @@ class ResilientClient:
                         delay = self._backoff_delay(attempt)
                         logger.warning(
                             "HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
-                            resp.status_code, full_url, delay,
-                            attempt + 1, self._max_retries,
+                            resp.status_code,
+                            full_url,
+                            delay,
+                            attempt + 1,
+                            self._max_retries,
                         )
                         await asyncio.sleep(delay)
                         continue
@@ -155,8 +156,11 @@ class ResilientClient:
                     delay = self._backoff_delay(attempt)
                     logger.warning(
                         "Request error for %s: %s, retrying in %.1fs (attempt %d/%d)",
-                        full_url, exc, delay,
-                        attempt + 1, self._max_retries,
+                        full_url,
+                        exc,
+                        delay,
+                        attempt + 1,
+                        self._max_retries,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -173,5 +177,5 @@ class ResilientClient:
 
     def _backoff_delay(self, attempt: int) -> float:
         """Compute exponential backoff delay for an attempt."""
-        delay = self._backoff_base * (2 ** attempt)
+        delay = self._backoff_base * (2**attempt)
         return min(delay, self._backoff_max)

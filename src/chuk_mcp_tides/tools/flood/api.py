@@ -5,6 +5,7 @@ Tools: tides_flood_outlook, tides_flooding_calendar
 """
 
 import logging
+from typing import Any
 
 from ...core.tide_manager import TideManager
 from ...models.responses import (
@@ -21,10 +22,10 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_flood_tools(mcp: object, manager: TideManager) -> None:
+def register_flood_tools(mcp: Any, manager: TideManager) -> None:
     """Register flood risk tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_flood_outlook(
         station_id: str,
         product: str = "htf_annual",
@@ -36,7 +37,9 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
         """Get high-tide flooding outlook (NOAA Derived Product API)."""
         try:
             raw = await manager.get_flood_outlook(
-                station_id, product=product, threshold=flood_threshold,
+                station_id,
+                product=product,
+                threshold=flood_threshold,
             )
 
             counts = [
@@ -70,7 +73,7 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_flooding_calendar(
         station_id: str,
         threshold: float,
@@ -84,8 +87,12 @@ def register_flood_tools(mcp: object, manager: TideManager) -> None:
         try:
             tp = manager.resolve_provider(provider)
             raw = await manager.flooding_calendar(
-                station_id, threshold, tp,
-                year=year, slr_offset_mm=slr_offset_mm, datum=datum,
+                station_id,
+                threshold,
+                tp,
+                year=year,
+                slr_offset_mm=slr_offset_mm,
+                datum=datum,
             )
 
             monthly = [

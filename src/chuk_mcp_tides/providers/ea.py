@@ -12,6 +12,7 @@ No API key required. Predictions are not available -- use the
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import httpx
 
@@ -38,7 +39,7 @@ class EAProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # list_stations
     # --------------------------------------------------------------------- #
-    async def list_stations(self, **kwargs: object) -> list[dict[str, object]]:
+    async def list_stations(self, **kwargs: Any) -> list[dict[str, Any]]:
         """Return EA tidal-level stations.
 
         Keyword Args:
@@ -59,11 +60,11 @@ class EAProvider(BaseTideProvider):
 
         items: list[dict] = data.get("items", [])
 
-        stations: list[dict[str, object]] = []
+        stations: list[dict[str, Any]] = []
         for item in items:
             lat = item.get("lat")
             lon = item.get("long")
-            station: dict[str, object] = {
+            station: dict[str, Any] = {
                 "station_id": item.get("stationReference", ""),
                 "name": item.get("label", ""),
                 "lat": lat,
@@ -79,15 +80,17 @@ class EAProvider(BaseTideProvider):
         centre_lon = kwargs.get("lon")
         if centre_lat is not None and centre_lon is not None:
             radius_km = float(kwargs.get("radius_km", 50))
-            filtered: list[dict[str, object]] = []
+            filtered: list[dict[str, Any]] = []
             for s in stations:
                 s_lat = s.get("lat")
                 s_lon = s.get("lon")
                 if s_lat is None or s_lon is None:
                     continue
                 dist = haversine_km(
-                    float(centre_lat), float(centre_lon),
-                    float(s_lat), float(s_lon),
+                    float(centre_lat),
+                    float(centre_lon),
+                    float(s_lat),
+                    float(s_lon),
                 )
                 if dist <= radius_km:
                     s["distance_km"] = round(dist, 2)
@@ -100,7 +103,7 @@ class EAProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_station_detail
     # --------------------------------------------------------------------- #
-    async def get_station_detail(self, station_id: str) -> dict[str, object]:
+    async def get_station_detail(self, station_id: str) -> dict[str, Any]:
         """Fetch detailed metadata for a single EA station."""
         url = f"{_BASE_URL}/id/stations/{station_id}"
         try:
@@ -131,9 +134,7 @@ class EAProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_predictions
     # --------------------------------------------------------------------- #
-    async def get_predictions(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_predictions(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Not supported -- the EA API only publishes observations.
 
         Raises:
@@ -149,22 +150,37 @@ class EAProvider(BaseTideProvider):
     # --------------------------------------------------------------------- #
     # get_observations
     # --------------------------------------------------------------------- #
-    async def get_observations(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_observations(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Fetch observed tidal-level readings.
 
         Keyword Args:
-            since: ISO-8601 datetime string.  Defaults to 24 h ago.
-            limit: Maximum number of readings (default 2000).
+            since:      ISO-8601 datetime string.  Defaults to 24 h ago.
+            start_date: YYYYMMDD or ISO date — converted to ``since``.
+            limit:      Maximum number of readings (default 2000).
         """
         since = kwargs.get("since")
         if since is None:
-            since = (
-                datetime.now(timezone.utc) - timedelta(days=1)
-            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Convert start_date (from TideManager) to EA 'since' parameter
+            start_date = kwargs.get("start_date")
+            if start_date:
+                sd = str(start_date)
+                if len(sd) == 8 and sd.isdigit():  # YYYYMMDD
+                    since = f"{sd[:4]}-{sd[4:6]}-{sd[6:8]}T00:00:00Z"
+                else:
+                    since = sd  # already ISO
+            else:
+                since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
 
+        # Auto-scale limit for longer date ranges (EA gives ~96 readings/day)
         limit = int(kwargs.get("limit", 2000))
+        try:
+            since_dt = datetime.fromisoformat(str(since).replace("Z", "+00:00"))
+            days = max(1, (datetime.now(timezone.utc) - since_dt).days)
+            limit = max(limit, days * 100)
+        except (ValueError, TypeError):
+            pass
 
         url = f"{_BASE_URL}/id/stations/{station_id}/readings"
         params: dict[str, str | int] = {
@@ -181,19 +197,21 @@ class EAProvider(BaseTideProvider):
             ) from exc
 
         items: list[dict] = data.get("items", [])
-        readings: list[dict[str, object]] = []
+        readings: list[dict[str, Any]] = []
         for r in items:
-            readings.append({
-                "time": r.get("dateTime"),
-                "value": r.get("value"),
-                "datum": "AOD",
-            })
+            readings.append(
+                {
+                    "time": r.get("dateTime"),
+                    "value": r.get("value"),
+                    "datum": "AOD",
+                }
+            )
         return readings
 
     # --------------------------------------------------------------------- #
     # get_latest
     # --------------------------------------------------------------------- #
-    async def get_latest(self, station_id: str, **kwargs: object) -> dict[str, object]:
+    async def get_latest(self, station_id: str, **kwargs: Any) -> dict[str, Any]:
         """Fetch the most recent tidal-level reading for a station."""
         url = f"{_BASE_URL}/id/stations/{station_id}/readings"
         params: dict[str, str | int] = {
@@ -210,9 +228,7 @@ class EAProvider(BaseTideProvider):
 
         items: list[dict] = data.get("items", [])
         if not items:
-            raise ValueError(
-                f"No readings available for EA station '{station_id}'."
-            )
+            raise ValueError(f"No readings available for EA station '{station_id}'.")
 
         reading = items[0]
         return {

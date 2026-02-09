@@ -342,11 +342,14 @@ class ThresholdExceedanceResponse(BaseModel):
             "",
         ]
         for g in self.groups:
-            lines.append(f"  {g.period}: {g.count} events, max {g.max_height:.3f}m, "
-                         f"{g.total_hours:.1f}h above")
+            lines.append(
+                f"  {g.period}: {g.count} events, max {g.max_height:.3f}m, "
+                f"{g.total_hours:.1f}h above"
+            )
         if self.trend:
-            lines.append(f"\nTrend: {self.trend.slope:+.2f} exceedances/year "
-                         f"(R²={self.trend.r_squared:.3f})")
+            lines.append(
+                f"\nTrend: {self.trend.slope:+.2f} exceedances/year (R²={self.trend.r_squared:.3f})"
+            )
         return "\n".join(lines)
 
 
@@ -606,8 +609,7 @@ class FloodOutlookResponse(BaseModel):
             lines.append(f"  {c.period}: {c.count} flood events")
         if self.projection:
             p = self.projection
-            lines.append(f"\nProjection ({p.year}): {p.expected} events "
-                         f"(range: {p.low}–{p.high})")
+            lines.append(f"\nProjection ({p.year}): {p.expected} events (range: {p.low}–{p.high})")
         return "\n".join(lines)
 
 
@@ -656,8 +658,19 @@ class FloodingCalendarResponse(BaseModel):
         lines.append(f"Total flood hours: {self.total_flood_hours:.1f}")
         lines.append("")
         month_names = [
-            "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            "",
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
         ]
         for ms in self.monthly_summary:
             if ms.flood_days > 0:
@@ -665,6 +678,116 @@ class FloodingCalendarResponse(BaseModel):
                     f"  {month_names[ms.month]:>3s}: {ms.flood_days} days, "
                     f"max {ms.max_height:.3f}m, {ms.total_hours:.1f}h"
                 )
+        return "\n".join(lines)
+
+
+# ─── Currents ────────────────────────────────────────────────────────────
+
+
+class CurrentStationSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    station_id: str
+    name: str
+    lat: float
+    lon: float
+    type: str | None = None
+    depth: float | None = None
+    depth_type: str | None = None
+    bin_number: int | None = None
+    provider: str | None = None
+
+
+class CurrentStationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: str
+    station_count: int
+    stations: list[CurrentStationSummary]
+    search_location: list[float] | None = None
+    search_radius_km: float | None = None
+    message: str
+
+    def to_text(self) -> str:
+        lines = [self.message, ""]
+        for s in self.stations:
+            loc = f"({s.lat:.4f}, {s.lon:.4f})"
+            depth = f" depth={s.depth:.1f}m" if s.depth is not None else ""
+            lines.append(f"  {s.station_id}: {s.name} {loc}{depth}")
+        return "\n".join(lines)
+
+
+class CurrentPredictionEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    datetime: str
+    event_type: str | None = None  # slack, flood, ebb
+    velocity_cm_s: float
+    mean_flood_dir: float | None = None
+    mean_ebb_dir: float | None = None
+    depth: float | None = None
+    bin_number: str | None = None
+
+
+class CurrentPredictionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    station_id: str
+    station_name: str
+    provider: str
+    units: str
+    start_date: str
+    end_date: str
+    interval: str
+    event_count: int
+    predictions: list[CurrentPredictionEvent]
+    artifact_ref: str | None = None
+    message: str
+
+    def to_text(self) -> str:
+        lines = [
+            self.message,
+            f"Station: {self.station_name} ({self.station_id})",
+            f"Period: {self.start_date} to {self.end_date}",
+            f"Interval: {self.interval}",
+            f"Events: {self.event_count}",
+            "",
+        ]
+        for ev in self.predictions[:20]:
+            tag = f" [{ev.event_type}]" if ev.event_type else ""
+            direction = ""
+            if ev.event_type == "flood" and ev.mean_flood_dir is not None:
+                direction = f" dir={ev.mean_flood_dir:.0f}\u00b0"
+            elif ev.event_type == "ebb" and ev.mean_ebb_dir is not None:
+                direction = f" dir={ev.mean_ebb_dir:.0f}\u00b0"
+            lines.append(f"  {ev.datetime}  {ev.velocity_cm_s:+.1f} cm/s{tag}{direction}")
+        if self.event_count > 20:
+            lines.append(f"  ... and {self.event_count - 20} more")
+        return "\n".join(lines)
+
+
+class LatestCurrentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    station_id: str
+    station_name: str
+    datetime: str
+    velocity_cm_s: float
+    direction: float | None = None
+    event_type: str | None = None  # slack, flood, ebb
+    depth: float | None = None
+    bin_number: str | None = None
+    units: str
+    message: str
+
+    def to_text(self) -> str:
+        lines = [
+            self.message,
+            f"Station: {self.station_name} ({self.station_id})",
+            f"Time: {self.datetime}",
+            f"Velocity: {self.velocity_cm_s:+.1f} cm/s",
+        ]
+        if self.direction is not None:
+            lines.append(f"Direction: {self.direction:.0f}\u00b0")
+        if self.event_type:
+            lines.append(f"Phase: {self.event_type}")
+        if self.depth is not None:
+            lines.append(f"Depth: {self.depth:.1f}m")
         return "\n".join(lines)
 
 

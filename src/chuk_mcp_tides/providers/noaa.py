@@ -16,7 +16,6 @@ import logging
 from datetime import date, timedelta
 from typing import Any
 
-import httpx
 
 from ..core.http_client import ResilientClient
 from ..core.utils import haversine_km
@@ -44,13 +43,19 @@ _UNITS_MAP: dict[str, str] = {
     "english": "english",
 }
 
+_CURRENT_EVENT_MAP: dict[str, str] = {
+    "slack": "slack",
+    "flood": "flood",
+    "ebb": "ebb",
+}
+
 _EVENT_TYPE_MAP: dict[str, str] = {
     "H": "high",
     "L": "low",
     "HH": "higher_high",
-    "HL": "high",      # alias used in some edge cases
+    "HL": "high",  # alias used in some edge cases
     "LL": "lower_low",
-    "LH": "low",       # alias used in some edge cases
+    "LH": "low",  # alias used in some edge cases
 }
 
 _TIMEOUT = 30.0
@@ -130,7 +135,7 @@ class NOAAProvider(BaseTideProvider):
 
     # ─── BaseTideProvider: list_stations ──────────────────────────────────
 
-    async def list_stations(self, **kwargs: object) -> list[dict[str, object]]:
+    async def list_stations(self, **kwargs: Any) -> list[dict[str, Any]]:
         """List NOAA tide prediction stations.
 
         Supported kwargs
@@ -156,18 +161,12 @@ class NOAAProvider(BaseTideProvider):
         region = kwargs.get("region")
         if region:
             region_upper = str(region).upper()
-            stations = [
-                s for s in stations
-                if (s.get("state") or "").upper() == region_upper
-            ]
+            stations = [s for s in stations if (s.get("state") or "").upper() == region_upper]
 
         station_type = kwargs.get("station_type")
         if station_type:
             st_lower = str(station_type).lower()
-            stations = [
-                s for s in stations
-                if (s.get("station_type") or "").lower() == st_lower
-            ]
+            stations = [s for s in stations if (s.get("station_type") or "").lower() == st_lower]
 
         lat = kwargs.get("lat")
         lon = kwargs.get("lon")
@@ -192,7 +191,7 @@ class NOAAProvider(BaseTideProvider):
 
     # ─── BaseTideProvider: get_station_detail ─────────────────────────────
 
-    async def get_station_detail(self, station_id: str) -> dict[str, object]:
+    async def get_station_detail(self, station_id: str) -> dict[str, Any]:
         """Get expanded metadata for a single station."""
         url = f"{_METADATA_BASE}/stations/{station_id}.json"
         params = {
@@ -284,10 +283,7 @@ class NOAAProvider(BaseTideProvider):
         elif isinstance(sensors_block, list):
             sensor_list = sensors_block
 
-        detail["sensors"] = [
-            str(s.get("name", s.get("sensorName", "")))
-            for s in sensor_list
-        ]
+        detail["sensors"] = [str(s.get("name", s.get("sensorName", ""))) for s in sensor_list]
 
         # ── Products ──────────────────────────────────────────────────────
         products_block = raw.get("products", {})
@@ -297,19 +293,14 @@ class NOAAProvider(BaseTideProvider):
         elif isinstance(products_block, list):
             product_list = products_block
 
-        detail["products"] = [
-            str(p.get("name", p.get("productName", "")))
-            for p in product_list
-        ]
+        detail["products"] = [str(p.get("name", p.get("productName", ""))) for p in product_list]
 
         detail["provider"] = "noaa"
         return detail  # type: ignore[return-value]
 
     # ─── BaseTideProvider: get_predictions ────────────────────────────────
 
-    async def get_predictions(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_predictions(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Get tidal predictions for a station.
 
         Supported kwargs
@@ -322,7 +313,7 @@ class NOAAProvider(BaseTideProvider):
         """
         begin_date, end_date = self._default_dates(
             kwargs.get("start_date"),  # type: ignore[arg-type]
-            kwargs.get("end_date"),    # type: ignore[arg-type]
+            kwargs.get("end_date"),  # type: ignore[arg-type]
         )
 
         datum = str(kwargs.get("datum", "MLLW"))
@@ -365,9 +356,7 @@ class NOAAProvider(BaseTideProvider):
 
     # ─── BaseTideProvider: get_observations ───────────────────────────────
 
-    async def get_observations(
-        self, station_id: str, **kwargs: object
-    ) -> list[dict[str, object]]:
+    async def get_observations(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Get observed water levels.
 
         Supported kwargs
@@ -381,7 +370,7 @@ class NOAAProvider(BaseTideProvider):
         """
         begin_date, end_date = self._default_dates(
             kwargs.get("start_date"),  # type: ignore[arg-type]
-            kwargs.get("end_date"),    # type: ignore[arg-type]
+            kwargs.get("end_date"),  # type: ignore[arg-type]
             default_days=1,
         )
 
@@ -419,13 +408,15 @@ class NOAAProvider(BaseTideProvider):
             value = r.get("v")
             if value is None or value == "":
                 continue
-            readings.append({
-                "datetime": r.get("t", ""),
-                "value": float(value),
-                "quality": r.get("q", None),
-                "flags": r.get("f", None),
-                "sigma": _safe_float(r.get("s")),
-            })
+            readings.append(
+                {
+                    "datetime": r.get("t", ""),
+                    "value": float(value),
+                    "quality": r.get("q", None),
+                    "flags": r.get("f", None),
+                    "sigma": _safe_float(r.get("s")),
+                }
+            )
         return readings
 
     def _parse_high_low(self, data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -436,36 +427,40 @@ class NOAAProvider(BaseTideProvider):
             if value is None or value == "":
                 continue
             raw_type = r.get("ty", r.get("type", ""))
-            readings.append({
-                "datetime": r.get("t", ""),
-                "value": float(value),
-                "event_type": _EVENT_TYPE_MAP.get(raw_type, raw_type),
-                "quality": r.get("q", None),
-            })
+            readings.append(
+                {
+                    "datetime": r.get("t", ""),
+                    "value": float(value),
+                    "event_type": _EVENT_TYPE_MAP.get(raw_type, raw_type),
+                    "quality": r.get("q", None),
+                }
+            )
         return readings
 
     def _parse_monthly_mean(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """Parse monthly_mean product responses."""
         readings: list[dict[str, Any]] = []
         for r in data.get("data", []):
-            readings.append({
-                "year": int(r.get("year", 0)),
-                "month": int(r.get("month", 0)),
-                "highest": _safe_float(r.get("highest")),
-                "msl": _safe_float(r.get("MSL")),
-                "mhw": _safe_float(r.get("MHW")),
-                "mhhw": _safe_float(r.get("MHHW")),
-                "mlw": _safe_float(r.get("MLW")),
-                "mllw": _safe_float(r.get("MLLW")),
-                "lowest": _safe_float(r.get("lowest")),
-                "dtl": _safe_float(r.get("DTL")),
-                "mtl": _safe_float(r.get("MTL")),
-            })
+            readings.append(
+                {
+                    "year": int(r.get("year", 0)),
+                    "month": int(r.get("month", 0)),
+                    "highest": _safe_float(r.get("highest")),
+                    "msl": _safe_float(r.get("MSL")),
+                    "mhw": _safe_float(r.get("MHW")),
+                    "mhhw": _safe_float(r.get("MHHW")),
+                    "mlw": _safe_float(r.get("MLW")),
+                    "mllw": _safe_float(r.get("MLLW")),
+                    "lowest": _safe_float(r.get("lowest")),
+                    "dtl": _safe_float(r.get("DTL")),
+                    "mtl": _safe_float(r.get("MTL")),
+                }
+            )
         return readings
 
     # ─── BaseTideProvider: get_latest ─────────────────────────────────────
 
-    async def get_latest(self, station_id: str, **kwargs: object) -> dict[str, object]:
+    async def get_latest(self, station_id: str, **kwargs: Any) -> dict[str, Any]:
         """Get the most recent water level reading for a station.
 
         Supported kwargs
@@ -495,16 +490,12 @@ class NOAAProvider(BaseTideProvider):
 
         raw_list = data.get("data", [])
         if not raw_list:
-            raise ValueError(
-                f"No recent observations available for station {station_id}"
-            )
+            raise ValueError(f"No recent observations available for station {station_id}")
 
         latest = raw_list[-1]
         value = latest.get("v")
         if value is None or value == "":
-            raise ValueError(
-                f"Latest observation for station {station_id} has no value"
-            )
+            raise ValueError(f"Latest observation for station {station_id} has no value")
 
         return {
             "station_id": station_id,
@@ -523,7 +514,7 @@ class NOAAProvider(BaseTideProvider):
         self,
         station_id: str,
         datum: str = "MLLW",
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         """Get the top-ten highest/lowest water levels from NOAA.
 
         Uses the ``toptenwaterlevels`` derived product which returns
@@ -543,11 +534,13 @@ class NOAAProvider(BaseTideProvider):
 
         highs: list[dict[str, Any]] = []
         for e in data.get("topTenWaterLevels", []):
-            highs.append({
-                "date": e.get("peakDate", ""),
-                "height": float(e.get("height", 0.0)),
-                "event_name": e.get("event"),
-            })
+            highs.append(
+                {
+                    "date": e.get("peakDate", ""),
+                    "height": float(e.get("height", 0.0)),
+                    "event_name": e.get("event"),
+                }
+            )
 
         # The top-ten endpoint only returns highs; sort descending.
         highs.sort(key=lambda x: x["height"], reverse=True)
@@ -561,7 +554,7 @@ class NOAAProvider(BaseTideProvider):
 
     # ─── Extended: get_sea_level_trend ────────────────────────────────────
 
-    async def get_sea_level_trend(self, station_id: str) -> dict[str, object]:
+    async def get_sea_level_trend(self, station_id: str) -> dict[str, Any]:
         """Get the sea-level trend for a station from NOAA's derived products.
 
         Hits the ``sealvltrends`` endpoint and extracts the record for the
@@ -586,9 +579,7 @@ class NOAAProvider(BaseTideProvider):
                 break
 
         if match is None:
-            raise ValueError(
-                f"No sea-level trend data found for station {station_id}"
-            )
+            raise ValueError(f"No sea-level trend data found for station {station_id}")
 
         # Convert inches/decade → mm/year: multiply by 2.54
         trend_in_dec = float(match.get("trend", 0.0))
@@ -599,8 +590,12 @@ class NOAAProvider(BaseTideProvider):
         # Parse dates: "07/15/1938" → year
         start_date = match.get("startDate", "")
         end_date = match.get("endDate", "")
-        first_year = int(start_date.split("/")[-1]) if "/" in start_date else int(match.get("firstYear", 0))
-        last_year = int(end_date.split("/")[-1]) if "/" in end_date else int(match.get("lastYear", 0))
+        first_year = (
+            int(start_date.split("/")[-1]) if "/" in start_date else int(match.get("firstYear", 0))
+        )
+        last_year = (
+            int(end_date.split("/")[-1]) if "/" in end_date else int(match.get("lastYear", 0))
+        )
 
         return {
             "station_id": station_id,
@@ -620,7 +615,7 @@ class NOAAProvider(BaseTideProvider):
         station_id: str,
         product: str = "htf_annual",
         threshold: str = "minor",
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         """Get high-tide flooding data from NOAA's derived products API.
 
         Parameters
@@ -646,11 +641,12 @@ class NOAAProvider(BaseTideProvider):
         # ── Determine the flood level in metres ──────────────────────────
         flood_level_m = 0.0
         # The response may include the threshold level; try several keys.
-        flood_level_m = _safe_float(
-            data.get("floodLevel")
-            or data.get("thresholdValue")
-            or data.get("threshold_value")
-        ) or 0.0
+        flood_level_m = (
+            _safe_float(
+                data.get("floodLevel") or data.get("thresholdValue") or data.get("threshold_value")
+            )
+            or 0.0
+        )
 
         # ── Parse annual counts ──────────────────────────────────────────
         # Real htf_annual response: {"AnnualFloodCount": [{"year":..., "minCount":..., "modCount":..., "majCount":...}]}
@@ -664,20 +660,19 @@ class NOAAProvider(BaseTideProvider):
 
         counts: list[dict[str, Any]] = []
         raw_counts: list[dict[str, Any]] = (
-            data.get("AnnualFloodCount")
-            or data.get("data")
-            or data.get("htfAnnual")
-            or []
+            data.get("AnnualFloodCount") or data.get("data") or data.get("htfAnnual") or []
         )
         if isinstance(raw_counts, list):
             for entry in raw_counts:
                 year = entry.get("year", entry.get("period", ""))
                 # Try threshold-specific key first, then generic fallbacks
                 count = entry.get(count_key, entry.get("count", entry.get("value", 0)))
-                counts.append({
-                    "period": str(year),
-                    "count": int(float(str(count))) if count is not None else 0,
-                })
+                counts.append(
+                    {
+                        "period": str(year),
+                        "count": int(float(str(count))) if count is not None else 0,
+                    }
+                )
 
         # ── Parse projection if present (htf_outlook) ────────────────────
         projection: dict[str, Any] | None = None
@@ -697,6 +692,174 @@ class NOAAProvider(BaseTideProvider):
             "flood_level_m": flood_level_m,
             "counts": counts,
             "projection": projection,
+        }
+
+    # ─── Extended: current stations ────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_current_station(raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert a raw NOAA current station record to a normalized dict."""
+        return {
+            "station_id": str(raw.get("id", raw.get("stationId", ""))),
+            "name": raw.get("name", ""),
+            "lat": float(raw.get("lat", 0.0)),
+            "lon": float(raw.get("lng", raw.get("lon", 0.0))),
+            "type": raw.get("type", None),
+            "depth": _safe_float(raw.get("depth")),
+            "depth_type": raw.get("depthType", None),
+            "bin_number": int(raw.get("currbin", 0)) if raw.get("currbin") else None,
+            "provider": "noaa",
+        }
+
+    async def list_current_stations(self, **kwargs: Any) -> list[dict[str, Any]]:
+        """List NOAA tidal current prediction stations.
+
+        Supported kwargs
+        ----------------
+        lat, lon, radius_km : proximity filter
+        region              : US state abbreviation (e.g. "WA")
+        max_results         : cap the number of returned stations
+        """
+        url = f"{_METADATA_BASE}/stations.json"
+        params: dict[str, str] = {"type": "currentpredictions"}
+
+        resp = await self._http.get(url, params=params)
+        data = resp.json()
+
+        self._check_error(data)
+
+        raw_stations: list[dict[str, Any]] = data.get("stations", [])
+        stations = [self._normalize_current_station(s) for s in raw_stations]
+
+        # ── Filters ──────────────────────────────────────────────────────
+
+        region = kwargs.get("region")
+        if region:
+            region_upper = str(region).upper()
+            stations = [s for s in stations if (s.get("state") or "").upper() == region_upper]
+
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+        radius_km = kwargs.get("radius_km")
+        if lat is not None and lon is not None:
+            lat_f = float(str(lat))
+            lon_f = float(str(lon))
+            r_km = float(str(radius_km)) if radius_km is not None else 50.0
+            filtered: list[dict[str, Any]] = []
+            for s in stations:
+                dist = haversine_km(lat_f, lon_f, s["lat"], s["lon"])
+                if dist <= r_km:
+                    s["distance_km"] = round(dist, 2)
+                    filtered.append(s)
+            stations = sorted(filtered, key=lambda s: s.get("distance_km", 0.0))
+
+        max_results = kwargs.get("max_results")
+        if max_results is not None:
+            stations = stations[: int(str(max_results))]
+
+        return stations  # type: ignore[return-value]
+
+    # ─── Extended: current predictions ─────────────────────────────────────
+
+    async def get_current_predictions(self, station_id: str, **kwargs: Any) -> list[dict[str, Any]]:
+        """Get tidal current predictions for a station.
+
+        Supported kwargs
+        ----------------
+        start_date  : YYYYMMDD  (default: today)
+        end_date    : YYYYMMDD  (default: start + 2 days)
+        units       : "metric" | "english" (default: "metric")
+        interval    : "MAX_SLACK" | "6" | "10" | "30" | "60" (default: "MAX_SLACK")
+        bin         : depth bin number (default: "1")
+        """
+        begin_date, end_date = self._default_dates(
+            kwargs.get("start_date"),  # type: ignore[arg-type]
+            kwargs.get("end_date"),  # type: ignore[arg-type]
+            default_days=2,
+        )
+
+        units = self._resolve_units(kwargs.get("units"))  # type: ignore[arg-type]
+        interval = str(kwargs.get("interval", "MAX_SLACK"))
+        bin_num = str(kwargs.get("bin", "1"))
+
+        params: dict[str, str] = {
+            "product": "currents_predictions",
+            "station": station_id,
+            "begin_date": begin_date,
+            "end_date": end_date,
+            "units": units,
+            "time_zone": "gmt",
+            "format": "json",
+            "interval": interval,
+            "bin": bin_num,
+        }
+
+        resp = await self._http.get(_DATA_BASE, params=params)
+        data = resp.json()
+
+        self._check_error(data)
+
+        raw_cp: list[dict[str, Any]] = data.get("current_predictions", {}).get("cp", [])
+        predictions: list[dict[str, Any]] = []
+        for cp in raw_cp:
+            raw_type = cp.get("Type", "").lower()
+            event: dict[str, Any] = {
+                "datetime": cp.get("Time", ""),
+                "event_type": _CURRENT_EVENT_MAP.get(raw_type, raw_type) or None,
+                "velocity_cm_s": float(cp.get("Velocity_Major", 0.0)),
+                "mean_flood_dir": _safe_float(cp.get("meanFloodDir")),
+                "mean_ebb_dir": _safe_float(cp.get("meanEbbDir")),
+                "depth": _safe_float(cp.get("Depth")),
+                "bin": cp.get("Bin"),
+            }
+            predictions.append(event)
+
+        return predictions  # type: ignore[return-value]
+
+    # ─── Extended: current latest ──────────────────────────────────────────
+
+    async def get_current_latest(self, station_id: str, **kwargs: Any) -> dict[str, Any]:
+        """Get the most recent current observation for a station.
+
+        Supported kwargs
+        ----------------
+        bin   : depth bin number (default: "1")
+        units : "metric" | "english" (default: "metric")
+        """
+        bin_num = str(kwargs.get("bin", "1"))
+        units = self._resolve_units(kwargs.get("units"))  # type: ignore[arg-type]
+
+        params: dict[str, str] = {
+            "product": "currents",
+            "station": station_id,
+            "date": "latest",
+            "units": units,
+            "time_zone": "gmt",
+            "format": "json",
+            "bin": bin_num,
+        }
+
+        resp = await self._http.get(_DATA_BASE, params=params)
+        data = resp.json()
+
+        self._check_error(data)
+
+        raw_list = data.get("data", [])
+        if not raw_list:
+            raise ValueError(f"No recent current observations available for station {station_id}")
+
+        latest = raw_list[-1]
+        speed = latest.get("s")
+        if speed is None or speed == "":
+            raise ValueError(f"Latest current observation for station {station_id} has no value")
+
+        return {
+            "station_id": station_id,
+            "datetime": latest.get("t", ""),
+            "velocity_cm_s": float(speed),
+            "direction": _safe_float(latest.get("d")),
+            "bin": latest.get("b", bin_num),
+            "units": "cm/s",
         }
 
 

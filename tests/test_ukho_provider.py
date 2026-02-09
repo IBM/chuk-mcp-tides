@@ -18,16 +18,20 @@ def ukho_no_key(monkeypatch):
 
 
 async def test_list_stations(ukho, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "features": [
+    mock_resilient(
+        [
+            make_response(
                 {
-                    "properties": {"Id": "0001", "Name": "Aberdeen", "Country": "Scotland"},
-                    "geometry": {"coordinates": [-2.08, 57.14]},
-                },
-            ]
-        }),
-    ])
+                    "features": [
+                        {
+                            "properties": {"Id": "0001", "Name": "Aberdeen", "Country": "Scotland"},
+                            "geometry": {"coordinates": [-2.08, 57.14]},
+                        },
+                    ]
+                }
+            ),
+        ]
+    )
 
     stations = await ukho.list_stations()
     assert len(stations) == 1
@@ -39,14 +43,24 @@ async def test_list_stations(ukho, mock_resilient, make_response):
 
 
 async def test_list_stations_proximity(ukho, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "features": [
-                {"properties": {"Id": "0001", "Name": "Near"}, "geometry": {"coordinates": [1.32, 51.12]}},
-                {"properties": {"Id": "0002", "Name": "Far"}, "geometry": {"coordinates": [10.0, 10.0]}},
-            ]
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "features": [
+                        {
+                            "properties": {"Id": "0001", "Name": "Near"},
+                            "geometry": {"coordinates": [1.32, 51.12]},
+                        },
+                        {
+                            "properties": {"Id": "0002", "Name": "Far"},
+                            "geometry": {"coordinates": [10.0, 10.0]},
+                        },
+                    ]
+                }
+            ),
+        ]
+    )
 
     stations = await ukho.list_stations(lat=51.12, lon=1.32, radius_km=10)
     assert len(stations) == 1
@@ -54,12 +68,16 @@ async def test_list_stations_proximity(ukho, mock_resilient, make_response):
 
 
 async def test_get_station_detail(ukho, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "properties": {"Id": "0001", "Name": "Aberdeen", "Country": "Scotland"},
-            "geometry": {"coordinates": [-2.08, 57.14]},
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "properties": {"Id": "0001", "Name": "Aberdeen", "Country": "Scotland"},
+                    "geometry": {"coordinates": [-2.08, 57.14]},
+                }
+            ),
+        ]
+    )
 
     detail = await ukho.get_station_detail("0001")
     assert detail["station_id"] == "0001"
@@ -67,12 +85,21 @@ async def test_get_station_detail(ukho, mock_resilient, make_response):
 
 
 async def test_get_predictions(ukho, mock_resilient, make_response):
-    mock_resilient([
-        make_response([
-            {"DateTime": "2024-01-01T06:00:00", "EventType": "HighWater", "Height": 4.5,
-             "IsApproximateTime": False, "IsApproximateHeight": False},
-        ]),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                [
+                    {
+                        "DateTime": "2024-01-01T06:00:00",
+                        "EventType": "HighWater",
+                        "Height": 4.5,
+                        "IsApproximateTime": False,
+                        "IsApproximateHeight": False,
+                    },
+                ]
+            ),
+        ]
+    )
 
     preds = await ukho.get_predictions("0001")
     assert len(preds) == 1

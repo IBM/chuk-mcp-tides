@@ -1,6 +1,5 @@
 """Tests for the resilient HTTP client."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -90,9 +89,7 @@ async def test_network_error_retries(client):
     ok_resp.raise_for_status.return_value = None
 
     mock_httpx = AsyncMock()
-    mock_httpx.get = AsyncMock(
-        side_effect=[httpx.ConnectError("timeout"), ok_resp]
-    )
+    mock_httpx.get = AsyncMock(side_effect=[httpx.ConnectError("timeout"), ok_resp])
     mock_httpx.is_closed = False
 
     with patch.object(client, "_ensure_client", return_value=mock_httpx):
@@ -103,9 +100,7 @@ async def test_network_error_retries(client):
 
 async def test_network_error_exhausted(client):
     mock_httpx = AsyncMock()
-    mock_httpx.get = AsyncMock(
-        side_effect=httpx.ConnectError("connection refused")
-    )
+    mock_httpx.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
     mock_httpx.is_closed = False
 
     with patch.object(client, "_ensure_client", return_value=mock_httpx):
@@ -158,9 +153,7 @@ async def test_base_url_prepended():
 
     with patch.object(c, "_ensure_client", return_value=mock_httpx):
         await c.get("/endpoint")
-        mock_httpx.get.assert_called_once_with(
-            "https://api.example.com/endpoint", params=None
-        )
+        mock_httpx.get.assert_called_once_with("https://api.example.com/endpoint", params=None)
 
 
 async def test_absolute_url_not_prepended():
@@ -176,9 +169,7 @@ async def test_absolute_url_not_prepended():
 
     with patch.object(c, "_ensure_client", return_value=mock_httpx):
         await c.get("https://other.com/api")
-        mock_httpx.get.assert_called_once_with(
-            "https://other.com/api", params=None
-        )
+        mock_httpx.get.assert_called_once_with("https://other.com/api", params=None)
 
 
 async def test_close():
@@ -203,6 +194,4 @@ async def test_params_passed_through(client):
 
     with patch.object(client, "_ensure_client", return_value=mock_httpx):
         await client.get("https://example.com/api", params={"key": "val"})
-        mock_httpx.get.assert_called_once_with(
-            "https://example.com/api", params={"key": "val"}
-        )
+        mock_httpx.get.assert_called_once_with("https://example.com/api", params={"key": "val"})

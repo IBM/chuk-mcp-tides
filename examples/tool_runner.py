@@ -6,7 +6,7 @@ Utility for running MCP tools standalone without a full MCP runtime.
 Captures tools registered via @mcp.tool decorators and provides
 a simple interface for testing and demos.
 
-18 tools across 6 categories.
+20 tools across 7 categories.
 """
 
 import asyncio
@@ -44,6 +44,7 @@ def create_runner() -> ToolRunner:
     manager = TideManager()
 
     from chuk_mcp_tides.tools.analysis import register_analysis_tools
+    from chuk_mcp_tides.tools.currents import register_currents_tools
     from chuk_mcp_tides.tools.discovery import register_discovery_tools
     from chuk_mcp_tides.tools.flood import register_flood_tools
     from chuk_mcp_tides.tools.observations import register_observation_tools
@@ -55,6 +56,7 @@ def create_runner() -> ToolRunner:
     register_observation_tools(runner, manager)
     register_analysis_tools(runner, manager)
     register_flood_tools(runner, manager)
+    register_currents_tools(runner, manager)
     register_discovery_tools(runner, manager)
 
     return runner

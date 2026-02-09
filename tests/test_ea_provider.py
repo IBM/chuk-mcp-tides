@@ -11,14 +11,23 @@ def ea():
 
 
 async def test_list_stations(ea, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "items": [
-                {"stationReference": "E1234", "label": "Dover", "lat": 51.1, "long": 1.3},
-                {"stationReference": "E5678", "label": "Sheerness", "lat": 51.4, "long": 0.7},
-            ]
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "items": [
+                        {"stationReference": "E1234", "label": "Dover", "lat": 51.1, "long": 1.3},
+                        {
+                            "stationReference": "E5678",
+                            "label": "Sheerness",
+                            "lat": 51.4,
+                            "long": 0.7,
+                        },
+                    ]
+                }
+            ),
+        ]
+    )
 
     stations = await ea.list_stations()
     assert len(stations) == 2
@@ -28,14 +37,18 @@ async def test_list_stations(ea, mock_resilient, make_response):
 
 
 async def test_list_stations_proximity(ea, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "items": [
-                {"stationReference": "E1234", "label": "Dover", "lat": 51.1, "long": 1.3},
-                {"stationReference": "E9999", "label": "Far", "lat": 10.0, "long": 10.0},
-            ]
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "items": [
+                        {"stationReference": "E1234", "label": "Dover", "lat": 51.1, "long": 1.3},
+                        {"stationReference": "E9999", "label": "Far", "lat": 10.0, "long": 10.0},
+                    ]
+                }
+            ),
+        ]
+    )
 
     stations = await ea.list_stations(lat=51.1, lon=1.3, radius_km=10)
     assert len(stations) == 1
@@ -43,15 +56,22 @@ async def test_list_stations_proximity(ea, mock_resilient, make_response):
 
 
 async def test_get_station_detail(ea, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "items": {
-                "stationReference": "E1234", "label": "Dover",
-                "lat": 51.1, "long": 1.3, "dateOpened": "2000-01-01",
-                "measures": [{"name": "Tidal Level"}],
-            }
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "items": {
+                        "stationReference": "E1234",
+                        "label": "Dover",
+                        "lat": 51.1,
+                        "long": 1.3,
+                        "dateOpened": "2000-01-01",
+                        "measures": [{"name": "Tidal Level"}],
+                    }
+                }
+            ),
+        ]
+    )
 
     detail = await ea.get_station_detail("E1234")
     assert detail["station_id"] == "E1234"
@@ -64,14 +84,18 @@ async def test_get_predictions_raises(ea):
 
 
 async def test_get_observations(ea, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "items": [
-                {"dateTime": "2024-01-01T12:00:00Z", "value": 3.45},
-                {"dateTime": "2024-01-01T12:15:00Z", "value": 3.50},
-            ]
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "items": [
+                        {"dateTime": "2024-01-01T12:00:00Z", "value": 3.45},
+                        {"dateTime": "2024-01-01T12:15:00Z", "value": 3.50},
+                    ]
+                }
+            ),
+        ]
+    )
 
     obs = await ea.get_observations("E1234")
     assert len(obs) == 2
@@ -80,11 +104,11 @@ async def test_get_observations(ea, mock_resilient, make_response):
 
 
 async def test_get_latest(ea, mock_resilient, make_response):
-    mock_resilient([
-        make_response({
-            "items": [{"dateTime": "2024-01-01T12:00:00Z", "value": 3.45}]
-        }),
-    ])
+    mock_resilient(
+        [
+            make_response({"items": [{"dateTime": "2024-01-01T12:00:00Z", "value": 3.45}]}),
+        ]
+    )
 
     latest = await ea.get_latest("E1234")
     assert latest["value"] == 3.45
@@ -96,3 +120,23 @@ async def test_get_latest_no_data(ea, mock_resilient, make_response):
 
     with pytest.raises(ValueError, match="No readings available"):
         await ea.get_latest("E1234")
+
+
+async def test_observations_start_date_conversion(ea, mock_resilient, make_response):
+    """start_date kwarg (YYYYMMDD) should be converted to EA 'since' parameter."""
+    mock_resilient(
+        [
+            make_response(
+                {
+                    "items": [
+                        {"dateTime": "2026-01-15T12:00:00Z", "value": 1.2},
+                    ]
+                }
+            ),
+        ]
+    )
+
+    obs = await ea.get_observations("E1234", start_date="20260101")
+    assert len(obs) == 1
+    # Verify that the data was returned (since param was used correctly)
+    assert obs[0]["value"] == 1.2

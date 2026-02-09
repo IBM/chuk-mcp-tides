@@ -6,6 +6,7 @@ Tools: tides_status, tides_capabilities
 
 import logging
 import os
+from typing import Any
 
 from ...constants import (
     DATUM_NAMES,
@@ -34,10 +35,10 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
-def register_discovery_tools(mcp: object, manager: TideManager) -> None:
+def register_discovery_tools(mcp: Any, manager: TideManager) -> None:
     """Register discovery tools with the MCP server."""
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_status(
         output_mode: str = "json",
     ) -> str:
@@ -46,16 +47,15 @@ def register_discovery_tools(mcp: object, manager: TideManager) -> None:
             # Determine storage provider name
             try:
                 local_prov = manager._get_provider(TideProvider.LOCAL)
-                storage = local_prov.storage.storage_provider
+                storage = local_prov.storage.storage_provider  # type: ignore[attr-defined]
             except Exception:
-                storage = os.environ.get(
-                    EnvVar.ARTIFACTS_PROVIDER, StorageProvider.MEMORY.value
-                )
+                storage = os.environ.get(EnvVar.ARTIFACTS_PROVIDER, StorageProvider.MEMORY.value)
             ukho_key = os.environ.get(EnvVar.UKHO_API_KEY)
 
             # Detect utide availability
             try:
-                import utide  # noqa: F401
+                import utide  # type: ignore[import-untyped]  # noqa: F401
+
                 harmonic_engine = "utide"
             except ImportError:
                 harmonic_engine = "utide (not installed)"
@@ -64,7 +64,7 @@ def register_discovery_tools(mcp: object, manager: TideManager) -> None:
             stored = 0
             try:
                 local_prov = manager._get_provider(TideProvider.LOCAL)
-                stored = local_prov.storage.stored_count()
+                stored = local_prov.storage.stored_count()  # type: ignore[attr-defined]
             except Exception:
                 pass
 
@@ -95,7 +95,7 @@ def register_discovery_tools(mcp: object, manager: TideManager) -> None:
         except Exception as e:
             return format_response(ErrorResponse(error=str(e)), output_mode)
 
-    @mcp.tool  # type: ignore[union-attr]
+    @mcp.tool
     async def tides_capabilities(
         output_mode: str = "json",
     ) -> str:
@@ -105,14 +105,16 @@ def register_discovery_tools(mcp: object, manager: TideManager) -> None:
             providers = []
             for tp in TideProvider:
                 info = PROVIDER_INFO[tp]
-                providers.append(ProviderInfo(
-                    name=info["name"],
-                    short_name=tp.value,
-                    coverage=info["coverage"],
-                    auth_required=info["auth"],
-                    station_count=info["station_count"],
-                    url=PROVIDER_URLS.get(tp),
-                ))
+                providers.append(
+                    ProviderInfo(
+                        name=info["name"],
+                        short_name=tp.value,
+                        coverage=info["coverage"],
+                        auth_required=info["auth"],
+                        station_count=info["station_count"],
+                        url=PROVIDER_URLS.get(tp),
+                    )
+                )
 
             # Build datum info
             datums = [
