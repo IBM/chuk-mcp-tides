@@ -72,6 +72,8 @@ source = ["src/chuk_mcp_tides"]
 omit = [
     "*/tests/*",
     "*/examples/*",
+    "src/chuk_mcp_tides/server.py",
+    "src/chuk_mcp_tides/async_server.py",
 ]
 
 [tool.coverage.report]

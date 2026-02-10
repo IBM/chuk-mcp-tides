@@ -243,3 +243,44 @@ async def test_latest_fallback_both_fail(observation_tools, mock_manager):
     )
     parsed = json.loads(result)
     assert parsed["tide_state"] == "unknown"
+
+
+# ── Station lookup failures ───────────────────────────────────────────────
+
+
+async def test_observations_station_lookup_fails(observation_tools, mock_manager):
+    """When get_station_detail raises, station_name stays as station_id."""
+    mock_manager.get_observations = AsyncMock(
+        return_value={
+            "readings": [{"datetime": "2024-01-01T12:00", "value": 0.5}],
+            "product": "water_level",
+        }
+    )
+    mock_manager.get_station_detail = AsyncMock(
+        side_effect=RuntimeError("Station not found"),
+    )
+
+    result = await observation_tools.get_tool("tides_observations")("UNKNOWN123")
+    parsed = json.loads(result)
+    assert parsed["station_name"] == "UNKNOWN123"
+    assert parsed["reading_count"] == 1
+
+
+async def test_latest_station_lookup_fails(observation_tools, mock_manager):
+    """When get_station_detail raises, station_name stays as station_id."""
+    mock_manager.get_latest = AsyncMock(
+        return_value={
+            "datetime": "2024-01-01T12:00:00",
+            "value": 0.75,
+            "datum": "MLLW",
+        }
+    )
+    mock_manager.get_station_detail = AsyncMock(
+        side_effect=RuntimeError("Station not found"),
+    )
+    mock_manager.get_predictions = AsyncMock(side_effect=RuntimeError("skip"))
+
+    result = await observation_tools.get_tool("tides_latest")("UNKNOWN123")
+    parsed = json.loads(result)
+    assert parsed["station_name"] == "UNKNOWN123"
+    assert parsed["value"] == 0.75

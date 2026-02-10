@@ -125,3 +125,50 @@ def test_requires_api_key(ukho_no_key):
 def test_auth_headers(ukho):
     headers = ukho._auth_headers()
     assert headers["Ocp-Apim-Subscription-Key"] == "test-key-123"
+
+
+# ── Lazy client initialization ────────────────────────────────────────────
+
+
+def test_client_lazy_initialization(ukho):
+    """_client() should lazily create a ResilientClient and reuse it."""
+    assert ukho._http is None
+    client1 = ukho._client()
+    assert client1 is not None
+    client2 = ukho._client()
+    assert client2 is client1  # same instance
+
+
+# ── HTTP error handling ──────────────────────────────────────────────────
+
+
+async def test_list_stations_http_error(ukho):
+    """HTTP errors from list_stations should be wrapped in ValueError."""
+    import httpx
+
+    from chuk_mcp_tides.core.http_client import ResilientClient
+    from unittest.mock import patch
+
+    with patch.object(
+        ResilientClient,
+        "get",
+        side_effect=httpx.ConnectError("Connection refused"),
+    ):
+        with pytest.raises(ValueError, match="UKHO API error listing stations"):
+            await ukho.list_stations()
+
+
+async def test_get_predictions_http_error(ukho):
+    """HTTP errors from get_predictions should be wrapped in ValueError."""
+    import httpx
+
+    from chuk_mcp_tides.core.http_client import ResilientClient
+    from unittest.mock import patch
+
+    with patch.object(
+        ResilientClient,
+        "get",
+        side_effect=httpx.ConnectError("Connection refused"),
+    ):
+        with pytest.raises(ValueError, match="UKHO API error fetching predictions"):
+            await ukho.get_predictions("0001")

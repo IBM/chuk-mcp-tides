@@ -275,3 +275,56 @@ async def test_currents_latest_error(currents_tools, mock_manager):
     result = await currents_tools.get_tool("tides_currents_latest")("cb0102")
     parsed = json.loads(result)
     assert "No recent current observations" in parsed["error"]
+
+
+# ── Station lookup failures ───────────────────────────────────────────────
+
+
+async def test_currents_predictions_station_lookup_fails(currents_tools, mock_manager):
+    """When list_current_stations fails, predictions should still work with default bin."""
+    mock_manager.list_current_stations = AsyncMock(
+        side_effect=RuntimeError("Station list unavailable"),
+    )
+    mock_manager.get_current_predictions = AsyncMock(
+        return_value={
+            "predictions": [
+                {
+                    "datetime": "2024-01-01 05:30",
+                    "event_type": "flood",
+                    "velocity_cm_s": 14.7,
+                },
+            ],
+            "provider": "noaa",
+            "units": "cm/s",
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-03",
+            "interval": "MAX_SLACK",
+        }
+    )
+
+    result = await currents_tools.get_tool("tides_currents_predictions")("PUG1515")
+    parsed = json.loads(result)
+    assert parsed["event_count"] == 1
+    # station_name falls back to station_id
+    assert parsed["station_name"] == "PUG1515"
+
+
+async def test_currents_latest_station_lookup_fails(currents_tools, mock_manager):
+    """When list_current_stations fails, latest should still work with default bin."""
+    mock_manager.list_current_stations = AsyncMock(
+        side_effect=RuntimeError("Station list unavailable"),
+    )
+    mock_manager.get_current_latest = AsyncMock(
+        return_value={
+            "datetime": "2024-01-01T12:00:00",
+            "velocity_cm_s": 25.3,
+            "direction": 133.0,
+            "units": "cm/s",
+        }
+    )
+
+    result = await currents_tools.get_tool("tides_currents_latest")("cb0102")
+    parsed = json.loads(result)
+    assert parsed["velocity_cm_s"] == 25.3
+    # station_name falls back to station_id
+    assert parsed["station_name"] == "cb0102"

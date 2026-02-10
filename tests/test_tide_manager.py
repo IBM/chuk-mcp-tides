@@ -592,3 +592,244 @@ async def test_compute_residual_dispatch(mgr_with_mock_provider):
     assert result["reading_count"] == 2
     assert result["max_positive_surge"]["peak_residual"] > 0
     assert len(result["residuals"]) == 2
+
+
+# ── project_flooding ──────────────────────────────────────────────────────
+
+
+async def test_project_flooding_dispatch(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    mock_prov.get_predictions = AsyncMock(
+        return_value=[
+            {"datetime": "2024-06-15T12:00", "height": 2.0, "event_type": "high"},
+            {"datetime": "2024-06-15T18:00", "height": 1.0, "event_type": "low"},
+            {"datetime": "2024-07-15T12:00", "height": 1.8, "event_type": "high"},
+        ]
+    )
+    mock_prov.get_station_detail = AsyncMock(
+        return_value={"name": "Providence", "lat": 41.8, "lon": -71.4}
+    )
+
+    result = await mgr.project_flooding(
+        "8454000",
+        1.5,
+        TideProvider.NOAA,
+        years=[2050, 2100],
+        scenarios=["intermediate"],
+    )
+    assert result["station_id"] == "8454000"
+    assert result["threshold"] == 1.5
+    assert len(result["projections"]) >= 1
+    assert len(result["tipping_points"]) >= 1
+
+
+async def test_project_flooding_tipping_points(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    # Return many events so baseline_count is high
+    events = [
+        {"datetime": f"2024-{m:02d}-15T12:00", "height": 2.0, "event_type": "high"}
+        for m in range(1, 13)
+    ]
+    mock_prov.get_predictions = AsyncMock(return_value=events)
+    mock_prov.get_station_detail = AsyncMock(return_value={"name": "Test"})
+
+    result = await mgr.project_flooding(
+        "8454000",
+        1.5,
+        TideProvider.NOAA,
+        years=[2050, 2075, 2100, 2150],
+        scenarios=["high"],
+    )
+    # Just verify tipping_points has the right structure
+    for tp in result["tipping_points"]:
+        assert "scenario" in tp
+        assert "double_year" in tp
+        assert "tenfold_year" in tp
+        assert "daily_year" in tp
+
+
+# ── harmonic_analysis ─────────────────────────────────────────────────────
+
+
+async def test_harmonic_analysis_insufficient_data(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    # Only 10 readings — far less than 30*24=720
+    mock_prov.get_observations = AsyncMock(
+        return_value=[{"datetime": f"2024-01-01T{h:02d}:00", "value": 1.0} for h in range(10)]
+    )
+
+    with pytest.raises(ValueError, match="30 days"):
+        await mgr.harmonic_analysis(
+            "8454000",
+            "2024-01-01",
+            "2024-01-10",
+            TideProvider.NOAA,
+        )
+
+
+async def test_harmonic_analysis_ea_time_key(mgr_with_mock_provider):
+    """EA data uses 'time' key and arrives unsorted — manager should handle both."""
+    mgr, mock_prov = mgr_with_mock_provider
+    # Need ≥30*24=720 readings
+    readings = [
+        {"time": f"2024-01-{(d + 1):02d}T{h:02d}:00:00Z", "value": 1.0 + 0.5 * (h % 6)}
+        for d in range(31)
+        for h in range(24)
+    ]
+    mock_prov.get_observations = AsyncMock(return_value=readings)
+    mock_prov.get_station_detail = AsyncMock(return_value={"lat": 51.8})
+
+    # Mock the local provider's analyze_harmonics
+    mock_local = AsyncMock()
+    mock_local.analyze_harmonics = AsyncMock(
+        return_value={"constituents": ["M2", "S2"], "station_id": "E1234"}
+    )
+    mgr._providers[TideProvider.LOCAL] = mock_local
+
+    result = await mgr.harmonic_analysis(
+        "E1234",
+        "2024-01-01",
+        "2024-01-31",
+        TideProvider.NOAA,
+    )
+    assert result["station_id"] == "E1234"
+    mock_local.analyze_harmonics.assert_called_once()
+
+
+# ── Currents via manager ──────────────────────────────────────────────────
+
+
+async def test_list_current_stations_cached(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    mock_prov.list_current_stations = AsyncMock(
+        return_value=[{"station_id": "PUG1515", "name": "Test"}]
+    )
+
+    result1 = await mgr.list_current_stations()
+    result2 = await mgr.list_current_stations()
+    assert result1 == result2
+    mock_prov.list_current_stations.assert_called_once()  # second call hit cache
+
+
+async def test_get_current_predictions_dispatch(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    mock_prov.get_current_predictions = AsyncMock(
+        return_value=[
+            {"datetime": "2024-01-01 02:45", "event_type": "slack", "velocity_cm_s": 0.0},
+        ]
+    )
+
+    result = await mgr.get_current_predictions("PUG1515")
+    assert result["station_id"] == "PUG1515"
+    assert result["provider"] == "noaa"
+    assert len(result["predictions"]) == 1
+
+
+async def test_get_current_latest_dispatch(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    mock_prov.get_current_latest = AsyncMock(
+        return_value={"velocity_cm_s": 25.3, "direction": 133.0}
+    )
+
+    result = await mgr.get_current_latest("cb0102")
+    assert result["velocity_cm_s"] == 25.3
+
+
+async def test_get_current_latest_not_noaa():
+    """Non-NOAA provider should raise NotImplementedError."""
+    mgr = TideManager()
+    mock_prov = MagicMock()
+    del mock_prov.get_current_latest
+    mgr._providers[TideProvider.NOAA] = mock_prov
+
+    with pytest.raises(NotImplementedError):
+        await mgr.get_current_latest("cb0102")
+
+
+# ── Constructor with custom artifact store ─────────────────────────────────
+
+
+def test_constructor_with_artifact_store():
+    """TideManager accepts a custom artifact store."""
+    store = MagicMock()
+    mgr = TideManager(artifact_store=store)
+    assert mgr._artifact_store is store
+
+
+# ── predict_local dispatch ─────────────────────────────────────────────────
+
+
+async def test_predict_local_dispatch(mgr_with_mock_provider):
+    mgr, _ = mgr_with_mock_provider
+    mock_local = AsyncMock()
+    mock_local.predict_from_constituents = AsyncMock(
+        return_value={"predictions": [{"datetime": "2024-01-01", "height": 1.0}]}
+    )
+    mgr._providers[TideProvider.LOCAL] = mock_local
+
+    result = await mgr.predict_local(
+        start_date="2024-01-01",
+        end_date="2024-01-07",
+        station_id="E1234",
+    )
+    assert "predictions" in result
+    mock_local.predict_from_constituents.assert_called_once()
+
+
+# ── threshold_exceedance with observations source ─────────────────────────
+
+
+async def test_threshold_exceedance_observations_source(mgr_with_mock_provider):
+    mgr, mock_prov = mgr_with_mock_provider
+    mock_prov.get_observations = AsyncMock(
+        return_value=[
+            {"datetime": "2024-06-15T12:00", "value": 2.0},
+            {"datetime": "2024-06-15T18:00", "value": 1.0},
+        ]
+    )
+
+    result = await mgr.threshold_exceedance(
+        "8454000",
+        1.5,
+        "2024-01-01",
+        "2024-12-31",
+        TideProvider.NOAA,
+        source="observations",
+    )
+    assert result["total_exceedances"] == 1
+
+
+# ── _get_provider lazy loading ──────────────────────────────────────────────
+
+
+def test_get_provider_ea():
+    mgr = TideManager()
+    p = mgr._get_provider(TideProvider.EA)
+    from chuk_mcp_tides.providers.ea import EAProvider
+
+    assert isinstance(p, EAProvider)
+
+
+def test_get_provider_ukho():
+    mgr = TideManager()
+    p = mgr._get_provider(TideProvider.UKHO)
+    from chuk_mcp_tides.providers.ukho import UKHOProvider
+
+    assert isinstance(p, UKHOProvider)
+
+
+def test_get_provider_local():
+    mgr = TideManager()
+    p = mgr._get_provider(TideProvider.LOCAL)
+    from chuk_mcp_tides.providers.local import LocalProvider
+
+    assert isinstance(p, LocalProvider)
+
+
+# ── warm_cache ─────────────────────────────────────────────────────────────
+
+
+async def test_warm_cache():
+    mgr = TideManager()
+    count = await mgr.warm_cache()
+    assert isinstance(count, int)
