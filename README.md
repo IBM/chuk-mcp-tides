@@ -24,7 +24,7 @@ uvx chuk-mcp-tides
 uv pip install chuk-mcp-tides
 
 # Or install from source
-git clone https://github.com/chuk-ai/chuk-mcp-tides.git
+git clone https://github.com/IBM/chuk-mcp-tides.git
 cd chuk-mcp-tides
 uv pip install -e ".[dev]"
 ```
@@ -185,4 +185,4 @@ chuk-mcp-tides integrates with the broader chuk MCP ecosystem:
 
 ## License
 
-Apache-2.0
+Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
