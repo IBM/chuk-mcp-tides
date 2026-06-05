@@ -56,8 +56,14 @@ def _classify_stages(series_by_day, datetimes, low_below, high_above):
         rng = (hi - lo) or 1.0
         sn = (h - lo) / rng
         stage = "low" if sn < low_below else ("high" if sn > high_above else "mid")
-        out.append({"datetime": ts, "height": round(h, 3), "stage_norm": round(float(sn), 3),
-                    "stage": stage})
+        out.append(
+            {
+                "datetime": ts,
+                "height": round(h, 3),
+                "stage_norm": round(float(sn), 3),
+                "stage": stage,
+            }
+        )
     return out
 
 
@@ -111,8 +117,10 @@ def register_analysis_tools(mcp: Any, manager: TideManager) -> None:
                 res = await manager.predict_local(
                     start_date=day, end_date=nxt, station_id=station_id, interval_minutes=15
                 )
-                return [(_parse_dt(p["datetime"]), float(p["height"]))
-                        for p in res.get("predictions", [])]
+                return [
+                    (_parse_dt(p["datetime"]), float(p["height"]))
+                    for p in res.get("predictions", [])
+                ]
 
             fitted = False
             try:
@@ -123,7 +131,9 @@ def register_analysis_tools(mcp: Any, manager: TideManager) -> None:
                 await manager.harmonic_analysis(
                     station_id,
                     (today - _dt.timedelta(days=fit_window_days)).isoformat(),
-                    today.isoformat(), tp, store_constituents=True,
+                    today.isoformat(),
+                    tp,
+                    store_constituents=True,
                 )
                 fitted = True
                 series_by_day = {days[0]: await _series(days[0])}
@@ -133,18 +143,31 @@ def register_analysis_tools(mcp: Any, manager: TideManager) -> None:
             records = _classify_stages(series_by_day, datetimes, low_below, high_above)
             stages = [TidalStage(**r) for r in records]
             n_low = sum(1 for s in stages if s.stage == "low")
-            msg = (f"Classified {len(stages)} timestamp(s) at {station_id}"
-                   f"{' (constituents freshly fitted)' if fitted else ''}; {n_low} at low stage")
+            msg = (
+                f"Classified {len(stages)} timestamp(s) at {station_id}"
+                f"{' (constituents freshly fitted)' if fitted else ''}; {n_low} at low stage"
+            )
             return format_response(
-                TidalStageResponse(station_id=station_id, count=len(stages), fitted=fitted,
-                                   stages=stages, message=msg),
+                TidalStageResponse(
+                    station_id=station_id,
+                    count=len(stages),
+                    fitted=fitted,
+                    stages=stages,
+                    message=msg,
+                ),
                 output_mode,
             )
         except FileNotFoundError:
-            return format_response(ErrorResponse(error=(
-                f"No stored constituents for '{station_id}' and could not fit from recent "
-                "observations. Run tides_harmonic_analysis first, or pass provider='ea' for "
-                "a UK gauge with recent data.")), output_mode)
+            return format_response(
+                ErrorResponse(
+                    error=(
+                        f"No stored constituents for '{station_id}' and could not fit from recent "
+                        "observations. Run tides_harmonic_analysis first, or pass provider='ea' for "
+                        "a UK gauge with recent data."
+                    )
+                ),
+                output_mode,
+            )
         except Exception as e:
             logger.error(f"tides_classify_stage failed: {e}")
             return format_response(ErrorResponse(error=str(e)), output_mode)
