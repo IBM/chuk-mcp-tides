@@ -679,10 +679,10 @@ class NOAAProvider(BaseTideProvider):
         proj_block = data.get("projection", data.get("outlook", None))
         if proj_block and isinstance(proj_block, dict):
             projection = {
-                "year": int(proj_block.get("year", 0)),
-                "expected": int(proj_block.get("expected", proj_block.get("median", 0))),
-                "low": int(proj_block.get("low", proj_block.get("min", 0))),
-                "high": int(proj_block.get("high", proj_block.get("max", 0))),
+                "year": int(proj_block.get("year", 0) or 0),
+                "expected": int(proj_block.get("expected", proj_block.get("median", 0)) or 0),
+                "low": int(proj_block.get("low", proj_block.get("min", 0)) or 0),
+                "high": int(proj_block.get("high", proj_block.get("max", 0)) or 0),
             }
 
         return {
