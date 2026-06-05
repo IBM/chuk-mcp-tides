@@ -375,7 +375,7 @@ wheels = [
 
 [[package]]
 name = "chuk-artifacts"
-version = "0.11.1"
+version = "0.11.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aioboto3" },
@@ -387,9 +387,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/93/22/639f641df8a872153b239d8d06c703d73f53e8c380255ccd23a582d6085d/chuk_artifacts-0.11.1.tar.gz", hash = "sha256:8fbc1cd30c59b4e43861f858f1970f8d35d8c05407ccc5a61b212b04908a0912", size = 154734, upload-time = "2026-02-18T14:39:45.971Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/b1/2ee70daba54ae6b4adde131be3fae194abbf7e0922282f2050e53eac1766/chuk_artifacts-0.11.3.tar.gz", hash = "sha256:3f79f8870f43205498ffe8ed9abe60ddf85afd24a4f89a88b0f36364ca69f646", size = 156386, upload-time = "2026-04-23T14:27:53.87Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/3b/5884d320e1b65c8176cee17d69c241ff531785ed5cb76c8cb7896839d42e/chuk_artifacts-0.11.1-py3-none-any.whl", hash = "sha256:368f92d71e45917755db68b45af7763ebaf68b92dfc67cc3868a408aff40c0b3", size = 78416, upload-time = "2026-02-18T14:39:44.512Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/72/7c763572bc31d9f78a323bbe2f461de545319cf6de324f7e7fb75ce9cff0/chuk_artifacts-0.11.3-py3-none-any.whl", hash = "sha256:f5a2ea7704b8764e67e060a74788d9b813fd7d3aaac298c6cefd58c3d1670dae", size = 80072, upload-time = "2026-04-23T14:27:52.369Z" },
 ]
 
 [[package]]
@@ -408,7 +408,7 @@ wheels = [
 
 [[package]]
 name = "chuk-mcp-server"
-version = "0.25.1"
+version = "0.25.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chuk-mcp" },
@@ -423,9 +423,9 @@ dependencies = [
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/be/51/e5a6fa0b783d5be890c745fda1bf06ed33338e86d0c08d206f953ccc43b3/chuk_mcp_server-0.25.1.tar.gz", hash = "sha256:88056b7b3a562a58dcfb24b143609a5238b7dc2cb5385e149a21055e37f1ea40", size = 728421, upload-time = "2026-02-23T15:07:47.384Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/71/57cf25f87141fae61725410b215bf806b71cfd5af8756bb11e8cda38e7ee/chuk_mcp_server-0.25.4.tar.gz", hash = "sha256:f5dcc2ae6ccbf272c426b9546399fbf3e26562cd2345e8b0aa0b3fd19439f255", size = 736026, upload-time = "2026-04-23T17:23:21.132Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/90/03aaaca99cf3790984857813cbc2b0b8e36bf2ed40f2ce03abb6862d19b4/chuk_mcp_server-0.25.1-py3-none-any.whl", hash = "sha256:81d62147410135061d6952f7f225646700ce10455b1ab8e1977ceed1fcab7fa7", size = 196909, upload-time = "2026-02-23T15:07:45.874Z" },
+    { url = "https://files.pythonhosted.org/packages/67/b4/b19c4629afb22543b8f7ead3759fc50bcf97c211c4e1e72329e7cc5a504c/chuk_mcp_server-0.25.4-py3-none-any.whl", hash = "sha256:df0ad5be600a78d91cc4c2676d733f3a30c276546194abe1419f78b31e17b1c4", size = 198660, upload-time = "2026-04-23T17:23:19.255Z" },
 ]
 
 [[package]]
@@ -465,8 +465,8 @@ harmonic = [
 [package.metadata]
 requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.0" },
-    { name = "chuk-artifacts", specifier = ">=0.11.1" },
-    { name = "chuk-mcp-server", specifier = ">=0.23.1" },
+    { name = "chuk-artifacts", specifier = ">=0.11.3" },
+    { name = "chuk-mcp-server", specifier = ">=0.25.4" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.7.0" },
     { name = "matplotlib", marker = "extra == 'harmonic'", specifier = ">=3.7.0" },
