@@ -6,6 +6,7 @@ Tools: tides_threshold_exceedance, tides_project_flooding,
        tides_sea_level_trend, tides_extreme_levels
 """
 
+import datetime as _dt
 import logging
 from typing import Any
 
@@ -26,6 +27,8 @@ from ...models.responses import (
     SeaLevelTrendResponse,
     SurgeEvent,
     ThresholdExceedanceResponse,
+    TidalStage,
+    TidalStageResponse,
     TippingPoint,
     TrendInfo,
     format_response,
@@ -34,8 +37,117 @@ from ...models.responses import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_dt(s: str) -> _dt.datetime:
+    return _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def _classify_stages(series_by_day, datetimes, low_below, high_above):
+    """Pure stage classification. series_by_day: {YYYY-MM-DD: [(datetime, height), ...]}."""
+    out = []
+    for ts in datetimes:
+        series = series_by_day.get(ts[:10])
+        if not series:
+            out.append({"datetime": ts, "height": None, "stage_norm": None, "stage": "unknown"})
+            continue
+        target = _parse_dt(ts)
+        h = float(min(series, key=lambda p: abs((p[0] - target).total_seconds()))[1])
+        heights = [p[1] for p in series]
+        lo, hi = min(heights), max(heights)
+        rng = (hi - lo) or 1.0
+        sn = (h - lo) / rng
+        stage = "low" if sn < low_below else ("high" if sn > high_above else "mid")
+        out.append({"datetime": ts, "height": round(h, 3), "stage_norm": round(float(sn), 3),
+                    "stage": stage})
+    return out
+
+
 def register_analysis_tools(mcp: Any, manager: TideManager) -> None:
     """Register analysis tools with the MCP server."""
+
+    @mcp.tool
+    async def tides_classify_stage(
+        datetimes: list[str],
+        station_id: str,
+        provider: str | None = None,
+        low_below: float = 0.33,
+        high_above: float = 0.66,
+        fit_window_days: int = 35,
+        output_mode: str = "json",
+    ) -> str:
+        """Classify timestamps by tidal stage — enables tide-stratified imagery selection.
+
+        Given acquisition timestamps (e.g. Sentinel-2 scene datetimes) and a tide station,
+        return the predicted tide HEIGHT and within-day stage (0 = that day's low water,
+        1 = high water) for each. Keep only same-tide scenes across epochs so multi-epoch
+        coastal change is real signal, not tide — the fix for the attrition-register confound
+        where clear-sky scenes happen to sample different tides in different years.
+
+        Uses the harmonic engine: if the station has no stored constituents, they are fitted
+        from the most recent ~fit_window_days of observations (pass provider='ea' for UK
+        gauges so the right observations are fetched).
+
+        Args:
+            datetimes: ISO timestamps to classify, e.g. ["2019-08-25T11:06:58Z", ...].
+            station_id: Tide gauge id (e.g. an EA station from tides_find_nearest).
+            provider: 'ea' (UK) or 'noaa'; used when constituents must be fitted.
+            low_below: stage_norm strictly below this is "low" (default 0.33).
+            high_above: stage_norm strictly above this is "high" (default 0.66).
+            fit_window_days: recent-observation window used to fit constituents if needed.
+            output_mode: "json" or "text".
+
+        Returns:
+            Per-timestamp tide height + stage; band your scenes (e.g. stage=='low') for a
+            tide-stratified composite/time-series.
+        """
+        try:
+            if not datetimes:
+                return format_response(
+                    ErrorResponse(error="Provide a non-empty list of ISO datetimes"), output_mode
+                )
+            days = sorted({ts[:10] for ts in datetimes})
+
+            async def _series(day: str):
+                nxt = (_dt.date.fromisoformat(day) + _dt.timedelta(days=1)).isoformat()
+                res = await manager.predict_local(
+                    start_date=day, end_date=nxt, station_id=station_id, interval_minutes=15
+                )
+                return [(_parse_dt(p["datetime"]), float(p["height"]))
+                        for p in res.get("predictions", [])]
+
+            fitted = False
+            try:
+                series_by_day = {days[0]: await _series(days[0])}
+            except FileNotFoundError:
+                tp = manager.resolve_provider(provider)
+                today = _dt.datetime.now(_dt.timezone.utc).date()
+                await manager.harmonic_analysis(
+                    station_id,
+                    (today - _dt.timedelta(days=fit_window_days)).isoformat(),
+                    today.isoformat(), tp, store_constituents=True,
+                )
+                fitted = True
+                series_by_day = {days[0]: await _series(days[0])}
+            for day in days[1:]:
+                series_by_day[day] = await _series(day)
+
+            records = _classify_stages(series_by_day, datetimes, low_below, high_above)
+            stages = [TidalStage(**r) for r in records]
+            n_low = sum(1 for s in stages if s.stage == "low")
+            msg = (f"Classified {len(stages)} timestamp(s) at {station_id}"
+                   f"{' (constituents freshly fitted)' if fitted else ''}; {n_low} at low stage")
+            return format_response(
+                TidalStageResponse(station_id=station_id, count=len(stages), fitted=fitted,
+                                   stages=stages, message=msg),
+                output_mode,
+            )
+        except FileNotFoundError:
+            return format_response(ErrorResponse(error=(
+                f"No stored constituents for '{station_id}' and could not fit from recent "
+                "observations. Run tides_harmonic_analysis first, or pass provider='ea' for "
+                "a UK gauge with recent data.")), output_mode)
+        except Exception as e:
+            logger.error(f"tides_classify_stage failed: {e}")
+            return format_response(ErrorResponse(error=str(e)), output_mode)
 
     @mcp.tool
     async def tides_threshold_exceedance(

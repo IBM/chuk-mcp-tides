@@ -7,7 +7,7 @@ for dual output mode (JSON + human-readable text).
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def format_response(model: BaseModel, output_mode: str = "json") -> str:
@@ -889,3 +889,36 @@ class CapabilitiesResponse(BaseModel):
             for w in self.cross_server_workflows:
                 lines.append(f"  {w.name}: {w.description}")
         return "\n".join(lines)
+
+
+class TidalStage(BaseModel):
+    """Tidal stage of a single timestamp (from tides_classify_stage)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    datetime: str = Field(..., description="The classified timestamp (input)")
+    height: float | None = Field(default=None, description="Predicted tide height (m, station datum)")
+    stage_norm: float | None = Field(
+        default=None, description="Within-day position: 0 = that day's low water, 1 = high water"
+    )
+    stage: str = Field(..., description="low | mid | high | unknown")
+
+    def to_text(self) -> str:
+        if self.height is None:
+            return f"{self.datetime}: unknown (no prediction)"
+        return f"{self.datetime}: {self.height:+.2f} m  stage={self.stage} ({self.stage_norm:.2f})"
+
+
+class TidalStageResponse(BaseModel):
+    """Tidal-stage classification for a set of timestamps."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    station_id: str = Field(..., description="Tide station used")
+    count: int = Field(..., description="Number of timestamps classified")
+    fitted: bool = Field(..., description="True if constituents were freshly fitted from recent obs")
+    stages: list[TidalStage] = Field(default_factory=list, description="Per-timestamp stage")
+    message: str = Field(default="", description="Human-readable summary")
+
+    def to_text(self) -> str:
+        return "\n".join([self.message, *(s.to_text() for s in self.stages)])

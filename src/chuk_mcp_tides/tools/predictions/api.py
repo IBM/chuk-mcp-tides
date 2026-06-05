@@ -5,6 +5,7 @@ Tools: tides_predict, tides_predict_local
 """
 
 import logging
+import re
 from typing import Any
 
 from ...core.tide_manager import TideManager
@@ -78,7 +79,17 @@ def register_prediction_tools(mcp: Any, manager: TideManager) -> None:
             )
             return format_response(response, output_mode)
         except Exception as e:
-            return format_response(ErrorResponse(error=str(e)), output_mode)
+            # Provider-routing papercut: predictions default to NOAA, so a non-NOAA id
+            # (e.g. an EA gauge from tides_find_nearest) fails here. Keep the original
+            # error but append a hint so the failure is actionable, not a bare 400.
+            msg = str(e)
+            if provider is None and not re.fullmatch(r"\d{7}", station_id.strip()):
+                msg += (
+                    f" | Note: '{station_id}' is not a NOAA station id (7 digits) and no provider "
+                    "was given — predictions default to NOAA. Pass provider= from tides_find_nearest; "
+                    "EA gauges are observations-only, so use tides_predict_local for those."
+                )
+            return format_response(ErrorResponse(error=msg), output_mode)
 
     @mcp.tool
     async def tides_predict_local(

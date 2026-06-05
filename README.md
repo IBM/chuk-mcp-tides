@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) server providing tidal predictions, observed
 water levels, harmonic analysis, and coastal flooding assessments from multiple
 national tide gauge networks.
 
-- **20 tools** across 7 categories (stations, predictions, observations, analysis, flood risk, currents, discovery)
+- **21 tools** across 7 categories (stations, predictions, observations, analysis, flood risk, currents, discovery)
 - **Multi-provider** — NOAA CO-OPS, UK Environment Agency, UKHO Admiralty, local harmonic engine
 - **Dual output** — JSON (structured) or human-readable text via `output_mode`
 - **Local harmonic engine** — offline tidal predictions from fitted constituents via utide
@@ -85,7 +85,7 @@ chuk-mcp-tides http --port 8003
 | `tides_observations` | Observed water levels (water_level, hourly, high_low, monthly_mean) |
 | `tides_latest` | Most recent reading with tide state and next high/low |
 
-### Analysis (6 tools)
+### Analysis (7 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -95,6 +95,7 @@ chuk-mcp-tides http --port 8003
 | `tides_residual` | Non-tidal residual (storm surge extraction) |
 | `tides_sea_level_trend` | Long-term sea level rise rate from historical data |
 | `tides_extreme_levels` | Top 10 highest/lowest observed levels |
+| `tides_classify_stage` | Tide height + stage at given timestamps (e.g. satellite acquisitions) for tide-stratified imagery selection |
 
 ### Flood Risk (2 tools)
 
