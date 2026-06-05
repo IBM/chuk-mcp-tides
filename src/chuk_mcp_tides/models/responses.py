@@ -897,7 +897,9 @@ class TidalStage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     datetime: str = Field(..., description="The classified timestamp (input)")
-    height: float | None = Field(default=None, description="Predicted tide height (m, station datum)")
+    height: float | None = Field(
+        default=None, description="Predicted tide height (m, station datum)"
+    )
     stage_norm: float | None = Field(
         default=None, description="Within-day position: 0 = that day's low water, 1 = high water"
     )
@@ -916,7 +918,9 @@ class TidalStageResponse(BaseModel):
 
     station_id: str = Field(..., description="Tide station used")
     count: int = Field(..., description="Number of timestamps classified")
-    fitted: bool = Field(..., description="True if constituents were freshly fitted from recent obs")
+    fitted: bool = Field(
+        ..., description="True if constituents were freshly fitted from recent obs"
+    )
     stages: list[TidalStage] = Field(default_factory=list, description="Per-timestamp stage")
     message: str = Field(default="", description="Human-readable summary")
 
