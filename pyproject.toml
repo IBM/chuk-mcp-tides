@@ -7,7 +7,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=0.9.1",
-    "chuk-mcp-server>=0.25.4",
+    "chuk-mcp-server>=0.25.5",
     "python-dotenv>=1.1.1",
     "pydantic>=2.0.0",
     # HTTP client for API calls
@@ -40,6 +40,22 @@ dev = [
 
 [project.scripts]
 chuk-mcp-tides = "chuk_mcp_tides.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "bandit>=1.7.0",
+    "pre-commit>=3.0.0",
+    # Harmonic engine for testing
+    "utide>=0.3.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+]
 
 [build-system]
 requires = ["hatchling"]
